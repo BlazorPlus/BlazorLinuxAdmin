@@ -1,5 +1,153 @@
 ﻿@inherits LayoutComponentBase
 
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment whe
+
+
+@if (BlazorSession.Current.Browser == null)
+{
+    BlazorSession.Current.SetTimeout(10, StateHasChanged);
+    return;
+}
+
+@if (viewmode == "connecting")
+{
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:32px;">
+        <div>
+            Checking permission for @username ...
+        </div>
+    </div>
+
+    return;
+}
+
+@if (viewmode == null)
+{
+    if (BlazorSession.Current.Browser.GetMemoryItem("LogonOK") as string != "OK")
+    {
+        if (whe.EnvironmentName != "Development")
+        {
+            username = BlazorSession.Current.Browser.GetMemoryItem("console_username") as string;
+            password = BlazorSession.Current.Browser.GetMemoryItem("console_password") as string;
+            viewmode = "login";
+        }
+        else
+        {
+            void LoginForDev()
+            {
+                BlazorSession.Current.Browser.SetMemoryItem("LogonOK", "OK");
+            }
+
+            <div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:32px;">
+                <h1>
+                    Development
+                </h1>
+                <div>
+                    In Development mode , you can use this app directly.
+                </div>
+                <div>
+                    In Production mode , you must login into linux via ssh localhost:22
+                </div>
+                <button class="btn btn-primary" style="margin:32px;width:100px;" @onclick="LoginForDev">
+                    OK
+                </button>
+            </div>
+            return;
+        }
+    }
+}
+
+@if (viewmode == "login")
+{
+
+    <style>
+        .label_1 {
+            display: inline-block;
+            width: 100px;
+            text-align: right;
+        }
+    </style>
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:32px;">
+        <h1>Login</h1>
+        <EditForm Model="this">
+            <span class="label_1">username:</span><InputText @bind-Value="username" />
+            <br />
+            <span class="label_1">password:</span><InputText @bind-Value="password" />
+            <br />
+            <span class="label_1"></span><button @onclick="DoLogin">Login</button>
+        </EditForm>
+    </div>
+    return;
+}
+
+@code{
+
+
+    string viewmode = null;
+    string username = "pi";
+    string password = "raspberry";
+
+    void DoLogin()
+    {
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            BlazorSession.Current.Toast("Require username");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            BlazorSession.Current.Toast("Require password");
+            return;
+        }
+
+        Renci.SshNet.SshClient client = new Renci.SshNet.SshClient("localhost", username, password);
+
+        viewmode = "connecting";
+
+        BlazorSession ses = BlazorSession.Current;
+
+        System.Threading.Thread t = new System.Threading.Thread(delegate ()
+        {
+            try
+            {
+                client.Connect();
+            }
+            catch (Exception x)
+            {
+                ses.InvokeInRenderThread(delegate
+                {
+                    BlazorSession.Current.Alert("Error", x.ToString());
+                    viewmode = "login";
+                    StateHasChanged();
+                });
+                return;
+            }
+
+            ses.InvokeInRenderThread(delegate
+            {
+                BlazorSession.Current.Browser.SetMemoryItem("console_username", username);
+                BlazorSession.Current.Browser.SetMemoryItem("console_password", password);
+
+                BlazorSession.Current.Browser.SetMemoryItem("LogonOK", "OK");
+                viewmode = null;
+                StateHasChanged();
+            });
+
+            try
+            {
+
+                client.Disconnect();
+                client.Dispose();
+            }
+            catch
+            {
+
+            }
+
+        });
+        t.Start();
+    }
+}
+
 <div class="sidebar">
     <NavMenu />
 </div>

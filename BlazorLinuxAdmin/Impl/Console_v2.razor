@@ -58,6 +58,7 @@
                 bses.InvokeInRenderThread(delegate
                 {
                     bses.Alert("Error", x.ToString());
+                    StateHasChanged();
                 });
                 return;
             }
@@ -198,8 +199,8 @@
     }
 
     server = BlazorSession.Current.Browser.GetMemoryItem("console_server") as string ?? "localhost";
-    username = BlazorSession.Current.Browser.GetMemoryItem("console_username") as string ?? "pi";
-    password = BlazorSession.Current.Browser.GetMemoryItem("console_password") as string ?? "raspberry";
+    username = BlazorSession.Current.Browser.GetMemoryItem("console_username") as string ?? "";//pi
+    password = BlazorSession.Current.Browser.GetMemoryItem("console_password") as string ?? "";//raspberry
 
     viewmode = "login";
 }
