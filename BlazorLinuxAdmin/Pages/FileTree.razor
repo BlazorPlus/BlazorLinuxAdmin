@@ -1,0 +1,173 @@
+﻿@page "/FileTree"
+
+<h1>FileTree</h1>
+
+
+<BlazorDomTree TagName="div" OnRootReady="Initialize_bdt_div1" style="padding:10px;border:solid 1px blue;min-height:202px;display:flex;" />
+
+@code{
+
+    PlusControl filelistpanel;
+
+    PlusControl previewpanel;
+
+    void Initialize_bdt_div1(BlazorDomTree bdt)
+    {
+        string rootfolder = this.GetType().Assembly.Location;
+        if (rootfolder.StartsWith("/"))
+            rootfolder = "/";       //unix
+        else
+            rootfolder = rootfolder.Split(':')[0] + ":\\";       //windows
+
+        PlusControl div1 = bdt.Root.Create("div style='width:33%'");
+        PlusControl div2 = bdt.Root.Create("div style='width:33%;border-left:solid 1px gray;border-right:solid 1px gray;'");
+        PlusControl div3 = bdt.Root.Create("div style='width:33%'");
+
+        div1.Create("div style='font-weight:bold'").InnerText("root " + rootfolder);
+        div1.Create("hr style='margin:0.5em 0'");
+
+        div2.Create("div").InnerHTML("Files:");
+        div2.Create("hr style='margin:0.5em 0'");
+        filelistpanel = div2.Create("div style='max-height:400px;overflow:auto'");
+
+        div3.Create("div").InnerHTML("Preview:");
+        div3.Create("hr style='margin:0.5em 0'");
+        previewpanel = div3.Create("div style='max-height:400px;overflow:auto'");
+
+
+        CreateComponentTree(div1.Create("div style='max-height:400px;overflow:auto'"), rootfolder);
+
+        ShowFileList(rootfolder);
+    }
+
+    void ShowFileList(string folder)
+    {
+        filelistpanel.ClearChildren();
+        previewpanel.ClearChildren();
+
+        filelistpanel.Create("div style='font-weight:bold'").InnerText(System.IO.Path.Combine(folder));
+
+        string[] files = System.IO.Directory.GetFiles(folder).OrderBy(v=>v).ToArray();
+
+        filelistpanel.Create("div").InnerText(files.Length + " files");
+        filelistpanel.Create("hr");
+
+        if (files.Length == 0)
+        {
+            filelistpanel.Create("div style='text-align:center;padding:3px;'").InnerText("<empty>");
+            return;
+        }
+
+        foreach (string filepath in files)
+        {
+            string filename = System.IO.Path.GetFileName(filepath);
+
+            PlusControl div = filelistpanel.Create("div style='padding:3px;cursor:default;'");
+            div.InnerText(filename);
+            div.OnClick(delegate
+            {
+                PreviewFile(filepath);
+            });
+        }
+    }
+
+    void PreviewFile(string filepath)
+    {
+        previewpanel.ClearChildren();
+
+        string filename = System.IO.Path.GetFileName(filepath);
+        System.IO.FileInfo info = new System.IO.FileInfo(filepath);
+        previewpanel.Create("div style='font-weight:bold'").InnerText(filename);
+        previewpanel.Create("div").InnerText(info.Length.ToString("###,##0") + " bytes");
+        previewpanel.Create("hr");
+
+        bool IsValidChar(char c)
+        {
+            if (c >= 32 && c <= 127)
+                return true;
+            if (c > 255)
+                return true;
+            switch (c)
+            {
+                case '\r':
+                case '\n':
+                case '\t':
+                case ' ':
+                    return true;
+            }
+            BlazorSession.Current.ConsoleLog(c + ":" + (int)c);
+            return false;
+        }
+
+        if (filepath.Length < 32768)
+        {
+            byte[] filedata = System.IO.File.ReadAllBytes(filepath);
+            string str = new System.IO.StreamReader(new System.IO.MemoryStream(filedata), System.Text.Encoding.UTF8, true).ReadToEnd();
+            if (str.All(c => IsValidChar(c)))
+            {
+                previewpanel.Create("div style='white-space:pre-wrap;word-break:break-word;'").InnerText(str);
+                return;
+            }
+        }
+
+        previewpanel.Create("div").InnerText("no preview logic for this file yet.");
+
+    }
+
+    void CreateComponentTree(PlusControl div, string parentfolder)
+    {
+        PlusControl table = div.Create("table style='cursor:default;'");
+
+        foreach (string subfolder in System.IO.Directory.GetDirectories(parentfolder).OrderBy(v=>v))
+        {
+            string foldername = System.IO.Path.GetFileName(subfolder);
+
+            PlusControl tr = table.Create("tr");
+            PlusControl td0 = tr.Create("td style='width:20px;'");
+            PlusControl icon = td0.Create("span class='oi oi-plus'");
+            PlusControl spantext = tr.Create("td").Create("span").InnerText(foldername);
+
+            PlusControl tr1 = table.Create("tr style='display:none'");
+            tr1.Create("td");
+            PlusControl subtd = tr1.Create("td");
+
+            void Toggle()
+            {
+                if (tr1.GetStyle("display") == "none")
+                {
+                    if (subtd.GetChildCount() == 0)
+                        CreateComponentTree(subtd, subfolder);/*Recursive*/
+
+                    ShowFileList(subfolder);
+
+                    icon.CssClass("oi oi-minus");
+                    tr1.SetStyle("display", "");
+                }
+                else
+                {
+                    icon.CssClass("oi oi-plus");
+                    tr1.SetStyle("display", "none");
+                }
+            }
+
+            //if (parentfolder=="/")Toggle();
+
+            new PlusControl[] { icon, spantext }.OnClick(delegate
+            {
+                Toggle();
+            });
+
+        }
+
+
+
+        if (table.GetChildCount() == 0)
+        {
+            string[] files = System.IO.Directory.GetFiles(parentfolder);
+            if (files.Length != 0)
+                table.Create("tr").Create("td").InnerText("<" + files.Length + " files>");
+            else
+                table.Create("tr").Create("td").InnerText("<empty>");
+        }
+    }
+}
