@@ -4,4 +4,15 @@
 
 Welcome to your new app.
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+<br />
+
+
+<button @onclick="(e)=>ShowHelloWorld()" @onclick:stopPropagation>Hello World</button>
+
+
+@code{
+    void ShowHelloWorld()
+    {
+        BlazorSession.Current.Alert("Greeting", "Hello World");
+    }
+}

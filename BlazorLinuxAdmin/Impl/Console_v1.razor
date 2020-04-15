@@ -1,0 +1,156 @@
+﻿
+<h1>Console</h1>
+
+
+
+<p>
+    OS:@Environment.OSVersion.Platform : @Environment.OSVersion
+    <br />
+    Dir : @Environment.CurrentDirectory
+</p>
+
+<BlazorDomTree OnRootReady="bdtready" />
+
+@code
+{
+    void bdtready(BlazorDomTree bdt)
+    {
+        PlusControl resultdiv = bdt.Root.Create("div style='margin:8px 0;height:400px;background-color:black;color:white;overflow-y:scroll;padding:5px 5px 15px;'");
+
+        PlusControl div1 = bdt.Root.Create("div style='display:flex;'");
+        // div1.Create("label style='width:100px").InnerText("Command:");
+        PlusControl inpword = div1.Create("input type='text' style='flex:99;padding:0 5px'");
+        PlusControl button = div1.Create("button").InnerText("Send");
+
+        inpword.SetFocus(99);
+
+        void SendLine(string line, string color)
+        {
+            var d = resultdiv.Create("div style='color:" + color + "'");
+            if (string.IsNullOrEmpty(line))
+                d.InnerHTML("<br/>");
+            else
+                d.InnerText(line);
+        }
+        void ScrollBottom()
+        {
+            resultdiv.Eval("this.scrollTop=this.scrollHeight");
+        }
+
+        var dict = Environment.GetEnvironmentVariables(EnvironmentVariableTarget.Process);
+        //foreach (object key in dict.Keys)
+        //{
+        //    SendLine(key + ":" + dict[key], "blue");
+        //}
+        SendLine("Path:" + dict["Path"], "yellow");
+
+        void SendCommand()
+        {
+            if (inpword.Attribute_Disabled)
+                return;
+
+            string cmdline = inpword.Value.Trim();
+            if (cmdline.Length == 0)
+            {
+                BlazorSession.Current.Toast("type something");
+                return;
+            }
+
+            inpword.Value = "";
+            SendLine(cmdline, "yellow");
+
+            ScrollBottom();
+
+            inpword.Attribute_Disabled(true);
+            button.Attribute_Disabled(true);
+
+            BlazorSession ses = BlazorSession.Current;
+
+            System.Threading.Thread t = new System.Threading.Thread(delegate ()
+            {
+                try
+                {
+                    System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo();
+
+                    if (Environment.OSVersion.ToString().Contains("Windows"))
+                    {
+                        psi.FileName = "cmd.exe";
+                        psi.Arguments = "/C " + cmdline;
+                    }
+                    else
+                    {
+                        psi.FileName = "/bin/bash";
+                        psi.Arguments = cmdline;
+                    }
+
+                //string[] parts = cmdline.Split(new char[] { ' ', '\t' });
+                //psi.FileName = parts[0];
+                //psi.Arguments = cmdline.Substring(psi.FileName.Length).Trim();
+
+                psi.RedirectStandardOutput = true;
+                    psi.RedirectStandardError = true;
+
+                    System.Diagnostics.Process p = System.Diagnostics.Process.Start(psi);
+                    p.OutputDataReceived += (sender, e) =>
+                    {
+                        ses.InvokeInRenderThread(delegate
+                        {
+                            SendLine(e.Data, "green");
+                        });
+                    };
+
+                    System.IO.StreamReader sout = p.StandardOutput;
+                    while (true)
+                    {
+                        string line = sout.ReadLine();
+                        if (line == null)
+                            break;
+                        ses.InvokeInRenderThread(delegate
+                        {
+                            SendLine(line, "wheat");
+                        });
+                    }
+
+                    sout = p.StandardError;
+                    while (true)
+                    {
+                        string line = sout.ReadLine();
+                        if (line == null)
+                            break;
+                        ses.InvokeInRenderThread(delegate
+                        {
+                            SendLine(line, "red");
+                        });
+                    }
+
+                }
+                catch (Exception x)
+                {
+                    ses.InvokeInRenderThread(delegate
+                    {
+                        SendLine(x.ToString(), "red");
+                    });
+                }
+                ses.InvokeInRenderThread(delegate
+                {
+                    inpword.Attribute_Disabled(false);
+                    button.Attribute_Disabled(false);
+                    resultdiv.Create("div style='margin:1px;border-top:solid 1px white'");
+                    ScrollBottom();
+                    inpword.SetFocus();
+
+                    this.StateHasChanged();
+                });
+            });
+            t.Start();
+
+
+        }
+
+        inpword.OnEnterKey(delegate { SendCommand(); });
+        button.OnClick(delegate { SendCommand(); });
+    }
+
+
+
+}

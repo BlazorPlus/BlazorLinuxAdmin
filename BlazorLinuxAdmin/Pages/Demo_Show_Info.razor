@@ -1,0 +1,231 @@
+﻿@page "/demo_show_info"
+@page "/demo_show_info/{index}/show"
+
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor hca
+
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment whe
+
+@inject Microsoft.Extensions.Configuration.IConfiguration config
+
+@inject NavigationManager navmgr
+
+@code{
+
+    [Parameter]
+    public string index { get; set; }
+}
+
+<style>
+    fieldset {
+        margin-bottom: 15px;
+    }
+
+        fieldset div {
+            padding-left: 20px;
+            white-space: nowrap;
+            max-width: 900px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+    legend {
+        font-size: 1em;
+        font-weight: bold;
+        margin: 8px 0;
+    }
+
+    label {
+        display: inline-block;
+        width: 180px;
+        color: navy;
+        overflow-x: hidden;
+        text-overflow: ellipsis;
+        margin: 0;
+        vertical-align: middle;
+    }
+</style>
+
+<fieldset>
+    <legend>
+        BlazorPlus.BlazorSession:
+    </legend>
+
+    <div>
+        @if (BlazorSession.Current.Browser != null)
+        {
+            <label>BrowserId : </label>@BlazorSession.Current.Browser.UniqueID
+        }
+        else
+        {
+            <label>BrowserId : </label><span>...Loading...</span>
+            BlazorSession.Current.SetTimeout(100, delegate
+            {
+                StateHasChanged();
+            });
+        }
+    </div>
+
+    <div>
+        <label>SessionId : </label>@BlazorSession.Current.SessionId
+    </div>
+
+    <div>
+        <label>StartTime : </label>@BlazorSession.Current.StartTime.ToLongTimeString()
+    </div>
+    <div>
+        <label>Elapsed : </label>@((DateTime.Now - BlazorSession.Current.StartTime).ToString().Split('.')[0])
+    </div>
+
+    <div>
+        <label>InstanceCount : </label>@BlazorSession.InstanceCount
+    </div>
+    <div>
+        <label>Session Disposed : </label>@BlazorSession.InstanceDisposedCount
+    </div>
+</fieldset>
+
+<fieldset>
+    <legend>
+        appsettings.json / appsettings.Development.json
+    </legend>
+    <div>
+        <label>LogLevel : </label>@config.GetSection("Logging").GetSection("LogLevel").GetSection("Default").Value
+    </div>
+</fieldset>
+
+
+<fieldset>
+    <legend>
+        HttpContext:
+    </legend>
+    <div>
+        <label>Connection.Id : </label>@hca.HttpContext.Connection.Id
+    </div>
+    <div>
+        <label>RemoteIpAddress : </label>@hca.HttpContext.Connection.RemoteIpAddress &nbsp;&nbsp;&nbsp;&nbsp; port: @hca.HttpContext.Connection.RemotePort
+    </div>
+    <div>
+        <label>Request Url : </label>@(hca.HttpContext.Request.Scheme)://@(hca.HttpContext.Request.Host)@(hca.HttpContext.Request.Path)@(hca.HttpContext.Request.QueryString)
+    </div>
+
+    <div>
+        <label>Current Uri : </label>@navmgr.Uri
+    </div>
+
+    <div>
+        <label>Request.Headers : </label>@string.Join(",", hca.HttpContext.Request.Headers.Keys.ToArray())
+    </div>
+    <div>
+        <label>Request.Cookies : </label>@string.Join(",", hca.HttpContext.Request.Cookies.Keys.ToArray())
+    </div>
+</fieldset>
+<fieldset>
+    <legend>
+        IWebHostEnvironment:
+    </legend>
+    <div>
+        <label>ApplicationName : </label>@whe.ApplicationName
+    </div>
+    <div>
+        <label>EnvironmentName : </label>@whe.EnvironmentName
+    </div>
+    <div>
+        <label>WebRootPath : </label>@whe.WebRootPath
+    </div>
+    <div>
+        <label>ContentRootPath : </label>@whe.ContentRootPath
+    </div>
+    @*<div>
+            <label>WebRootFileProvider : </label>@whe.WebRootFileProvider
+        </div>
+        <div>
+            <label>ContentRootFileProvider : </label>@whe.ContentRootFileProvider
+        </div>*@
+</fieldset>
+
+@{
+    System.Diagnostics.Process p = System.Diagnostics.Process.GetCurrentProcess();
+}
+
+<fieldset>
+    <legend>
+        Environment:
+    </legend>
+    <div>
+        <label>TargetFramework : </label>@AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName
+    </div>
+    <div>
+        <label>Version : </label>@Environment.Version
+    </div>
+    <div>
+        <label>OSVersion : </label>@Environment.OSVersion ( @(Environment.Is64BitProcess?"64bit":"32bit") )
+    </div>
+    <div>
+        <label>CurrentDirectory : </label>@Environment.CurrentDirectory
+    </div>
+    <div>
+        <label>WorkingSet : </label>@Environment.WorkingSet.ToString("###,###,##0")
+    </div>
+    <div>
+        <label>PeakWorkingSet64 : </label>@p.PeakWorkingSet64.ToString("###,###,##0")
+    </div>
+    <div>
+        <label>HandleCount : </label>@p.HandleCount
+    </div>
+    <div>
+        <label>ProcessName : </label>@p.ProcessName
+    </div>
+    <div>
+        <label>BaseDirectory : </label>@AppDomain.CurrentDomain.BaseDirectory
+    </div>
+</fieldset>
+<fieldset>
+    <legend>
+        GC Memory: <button @onclick="() => { }">Update</button>
+        <button @onclick='() => { BlazorSession.Current.Toast(GC.GetTotalMemory(true).ToString("###,###,##0")); }'>Collect</button>
+    </legend>
+    <div>
+        <label>GetTotalMemory(false) : </label>@(GC.GetTotalMemory(false).ToString("###,###,##0"))
+    </div>
+    @{
+        var minfo = GC.GetGCMemoryInfo();
+    }
+
+    <div>
+        <label>HeapSizeBytes : </label>@minfo.HeapSizeBytes.ToString("###,###,##0")
+    </div>
+    <div>
+        <label>FragmentedBytes : </label>@minfo.FragmentedBytes.ToString("###,###,##0")
+    </div>
+
+    @if (hca.HttpContext.Connection.RemoteIpAddress.ToString() == "::1")
+    {
+        <div>
+            <label>Sys-Used : </label>@minfo.MemoryLoadBytes.ToString("###,###,##0")
+        </div>
+        <div>
+            <label>Sys-Total : </label>@minfo.TotalAvailableMemoryBytes.ToString("###,###,##0")
+        </div>
+        <div>
+            <label>HighM-LoadThreshold : </label>@minfo.HighMemoryLoadThresholdBytes.ToString("###,###,##0")
+        </div>
+
+    }
+</fieldset>
+
+
+<fieldset>
+    <legend>
+        Disk/Folder
+    </legend>
+    <div>
+        <label>Disks :</label>@(string.Join(",",Environment.GetLogicalDrives()))
+    </div>
+    @foreach (var enumval in Enum.GetValues(typeof(Environment.SpecialFolder)))
+    {
+        <div>
+            <label>@enumval :</label>@Environment.GetFolderPath((Environment.SpecialFolder)enumval)
+        </div>
+    }
+
+</fieldset>

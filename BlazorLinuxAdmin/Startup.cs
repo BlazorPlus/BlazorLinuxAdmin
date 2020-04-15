@@ -29,6 +29,9 @@ namespace BlazorLinuxAdmin
             services.AddRazorPages();
             services.AddServerSideBlazor();
             services.AddSingleton<WeatherForecastService>();
+
+            services.AddHttpContextAccessor();
+            services.AddScoped<BlazorPlus.BlazorSession>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -52,6 +55,8 @@ namespace BlazorLinuxAdmin
 
             app.UseEndpoints(endpoints =>
             {
+                endpoints.Map("/_blazorplus_handler", BlazorPlus.BlazorSession.ProcessRequestAsync);
+
                 endpoints.MapBlazorHub();
                 endpoints.MapFallbackToPage("/_Host");
             });
