@@ -1,7 +1,7 @@
 # BlazorLinuxAdmin
 
 
-# Progresss v0.0.4 Better Console (Linux & WIn)
+# Progresss v0.0.4 Better Console (Linux & Win)
 
 Just a tool for :
 
@@ -11,8 +11,10 @@ Just a tool for :
 
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/BlazorLinuxAdmin.png)
 
+![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/BlazorLinuxAdmin-FileTree.png)
 
-# Progresss v0.0.3 - File Tree
+
+Progresss v0.0.3 - File Tree
 
 Progresss v0.0.2 - global login 
 
