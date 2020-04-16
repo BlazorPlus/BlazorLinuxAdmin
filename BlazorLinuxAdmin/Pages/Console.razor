@@ -1,3 +1,34 @@
 ﻿@page "/Console"
 
-<BlazorLinuxAdmin.Impl.Console_v2 />
+@code{
+    string viewmode = null;
+}
+
+@if (viewmode == null)
+{
+    if (Environment.OSVersion.ToString().Contains("Windows"))
+    {
+        <div>
+            <p>This is a win host , select a tool:</p>
+            <div>
+                <button @onclick='() => viewmode = "win"'>CMD - localhost</button>
+                &nbsp;
+                <button @onclick='() => viewmode = "ssh"'>SSH - any host</button>
+            </div>
+        </div>
+        return;
+    }
+    else
+    {
+        viewmode = "ssh";
+    }
+}
+
+@if (viewmode == "win")
+{
+    <BlazorLinuxAdmin.Impl.Console_win />
+}
+else if (viewmode == "ssh")
+{
+    <BlazorLinuxAdmin.Impl.Console_ssh />
+}

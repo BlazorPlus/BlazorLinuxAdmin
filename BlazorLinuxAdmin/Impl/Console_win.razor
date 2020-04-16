@@ -1,0 +1,191 @@
+﻿
+@implements IDisposable
+
+<h1>Console cmd.exe</h1>
+
+<p>
+    OS:@Environment.OSVersion.Platform : @Environment.OSVersion
+    <br />
+    Dir : @Environment.CurrentDirectory
+</p>
+
+<BlazorDomTree OnRootReady="bdtready" />
+
+@code
+{
+    System.Diagnostics.Process proc;
+    bool _pagedisposed = false;
+    void IDisposable.Dispose()
+    {
+        _pagedisposed = true;
+        if (proc != null)
+            proc.Kill();
+        proc = null;
+    }
+
+    void bdtready(BlazorDomTree bdt)
+    {
+        System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo();
+        psi.RedirectStandardInput = true;
+        psi.RedirectStandardOutput = true;
+        psi.RedirectStandardError = true;
+        psi.FileName = "cmd.exe";
+        proc = System.Diagnostics.Process.Start(psi);
+
+        BlazorSession ses = BlazorSession.Current;
+
+
+        PlusControl resultdiv = bdt.Root.Create("div style='margin:8px 0;height:400px;background-color:black;color:white;overflow-y:scroll;padding:5px 5px 15px;'");
+
+        PlusControl div1 = bdt.Root.Create("div style='display:flex;'");
+        // div1.Create("label style='width:100px").InnerText("Command:");
+        PlusControl inpword = div1.Create("input type='text' style='flex:99;padding:0 5px'");
+        PlusControl button = div1.Create("button").InnerText("Send");
+        div1.Create("button").InnerText("^C").OnClick(delegate
+        {
+            if (inpword.Attribute_Disabled)
+                return;
+            proc.StandardInput.Write((byte)3);
+            proc.StandardInput.Flush();
+        });
+
+        inpword.SetFocus(99);
+
+        void SendLine(string line, string color)
+        {
+            var d = resultdiv.Create("div style='color:" + color + "'");
+            if (string.IsNullOrEmpty(line))
+                d.InnerHTML("<br />");
+            else
+                d.InnerText(line);
+        }
+        void ScrollBottom()
+        {
+            resultdiv.Eval("this.scrollTop=this.scrollHeight");
+        }
+
+        void SendCommand()
+        {
+            if (inpword.Attribute_Disabled)
+                return;
+
+            string cmdline = inpword.Value.Trim();
+            if (cmdline.Length == 0)
+            {
+                BlazorSession.Current.Toast("type something");
+                return;
+            }
+
+            inpword.Value = "";
+            SendLine(cmdline, "yellow");
+
+            ScrollBottom();
+
+            proc.StandardInput.WriteLine(cmdline);
+            proc.StandardInput.Flush();
+
+        }
+
+        inpword.OnEnterKey(delegate { SendCommand(); });
+        button.OnClick(delegate { SendCommand(); });
+
+        PlusControl div2 = bdt.Root.Create("div style='display:flex;'");
+
+        List<string> cmds = new List<string>();
+        cmds.Add("ls");
+        cmds.Add("ps -ef|grep dotnet");
+
+        foreach (string cmd in cmds)
+        {
+            div2.Create("button").InnerText(cmd).OnClick(delegate
+            {
+                if (inpword.Attribute_Disabled)
+                    return;
+                resultdiv.Create("div style='margin:1px;border-top:solid 1px white'");
+                proc.StandardInput.WriteLine(cmd);
+                proc.StandardInput.Flush();
+            });
+        }
+
+
+        async Task ReadOutputAsync(BlazorSession ses)
+        {
+            try
+            {
+                while (true)
+                {
+                    string line = await proc.StandardOutput.ReadLineAsync();
+                    if (line == null)
+                        break;
+                    ses.InvokeInRenderThread(delegate
+                    {
+                        SendLine(line, "");
+                        ScrollBottom();
+                    });
+                }
+            }
+            catch (Exception x)
+            {
+                if (_pagedisposed)
+                    return;
+                ses.InvokeInRenderThread(delegate
+                {
+                    ses.Toast(x.ToString());
+                });
+            }
+            finally
+            {
+                if (!_pagedisposed)
+                {
+                    ses.InvokeInRenderThread(delegate
+                    {
+                        inpword.Attribute_Disabled(true);
+                        button.Attribute_Disabled(true);
+                        if (proc.HasExited)
+                        {
+                            SendLine("cmd.exe exit", "yellow");
+                        }
+                        else
+                        {
+                            SendLine("Unknown error", "red");
+                        }
+                    });
+                }
+            }
+        }
+
+        var t1 = ReadOutputAsync(ses);
+
+        async Task ReadErrorAsync(BlazorSession ses)
+        {
+            try
+            {
+                while (true)
+                {
+                    string line = await proc.StandardError.ReadLineAsync();
+                    if (line == null)
+                        break;
+                    ses.InvokeInRenderThread(delegate
+                    {
+                        SendLine(line, "orange");
+                        ScrollBottom();
+                    });
+                }
+            }
+            catch (Exception x)
+            {
+                if (_pagedisposed)
+                    return;
+                ses.InvokeInRenderThread(delegate
+                {
+                    ses.Toast(x.ToString());
+                });
+            }
+        }
+
+        var t2 = ReadErrorAsync(ses);
+    }
+
+
+
+}
