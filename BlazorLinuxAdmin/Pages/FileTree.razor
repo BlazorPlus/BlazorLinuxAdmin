@@ -47,7 +47,7 @@
 
         filelistpanel.Create("div style='font-weight:bold'").InnerText(System.IO.Path.Combine(folder));
 
-        string[] files = System.IO.Directory.GetFiles(folder).OrderBy(v=>v).ToArray();
+        string[] files = System.IO.Directory.GetFiles(folder).OrderBy(v => v).ToArray();
 
         filelistpanel.Create("div").InnerText(files.Length + " files");
         filelistpanel.Create("hr");
@@ -99,15 +99,34 @@
             return false;
         }
 
-        if (filepath.Length < 32768)
+        if (info.Length == 0)
+        {
+            string text = System.IO.File.ReadAllText(filepath, System.Text.Encoding.UTF8);
+            if(string.IsNullOrEmpty(text))
+            {
+                previewpanel.Create("div").InnerText("<empty/>");
+                return;
+            }
+            previewpanel.Create("div").InnerText(text.Length + " chars");
+            previewpanel.Create("hr");
+            previewpanel.Create("div").InnerText(text);
+            return;
+        }
+
+        if (info.Length < 32768)
         {
             byte[] filedata = System.IO.File.ReadAllBytes(filepath);
             string str = new System.IO.StreamReader(new System.IO.MemoryStream(filedata), System.Text.Encoding.UTF8, true).ReadToEnd();
-            if (str.All(c => IsValidChar(c)))
+            if (str.Where(c => IsValidChar(c)).Count() > filedata.Length * 3 / 4)
             {
                 previewpanel.Create("div style='white-space:pre-wrap;word-break:break-word;'").InnerText(str);
-                return;
             }
+            else
+            {
+                previewpanel.Create("div").InnerText(filedata.Length + " bytes");
+                previewpanel.Create("div").InnerText("no preview logic for this file yet.");
+            }
+            return;
         }
 
         previewpanel.Create("div").InnerText("no preview logic for this file yet.");
@@ -118,7 +137,7 @@
     {
         PlusControl table = div.Create("table style='cursor:default;'");
 
-        foreach (string subfolder in System.IO.Directory.GetDirectories(parentfolder).OrderBy(v=>v))
+        foreach (string subfolder in System.IO.Directory.GetDirectories(parentfolder).OrderBy(v => v))
         {
             string foldername = System.IO.Path.GetFileName(subfolder);
 

@@ -1,0 +1,55 @@
+﻿@inherits UIDialogConfirmBase
+
+<div style="min-width:360px;margin:12px 24px;padding:24px;background-color:white;border-radius:12px;box-shadow:#999 5px 5px 15px;text-align:center">
+	<h3 class="text-info">@Option.RenderTitle()</h3>
+	<p>
+		@Option.RenderMessage()
+	</p>
+	<hr />
+	<button class="@OKButtonClass" style="min-width:90px" @ref="btnok" @onclick="OKClicked">@Option.OKText</button>
+	&nbsp;&nbsp;&nbsp;
+	<button class="btn btn-info" style="min-width:90px" @ref="btncancel" @onclick="CancelClicked">@Option.CancelText</button>
+</div>
+
+@code
+{
+	string OKButtonClass
+	{
+		get
+		{
+			switch (Option.OKType)
+			{
+				case UIDialogOptionActionType.Danger:
+					return "btn btn-danger";
+				default:
+					return "btn btn-primary";
+			}
+		}
+	}
+
+	protected override void OnSetOption()
+	{
+		if (Option.OKText == null)
+			Option.OKText = "OK";
+		if (Option.CancelText == null)
+			Option.CancelText = "Cancel";
+	}
+
+	ElementReference btnok;
+	ElementReference btncancel;
+
+	protected override void OnAfterRender(bool firstRender)
+	{
+		BlazorSession.Current.Focus(btncancel);
+	}
+
+	void OKClicked()
+	{
+		CloseDialog(true);
+	}
+
+	void CancelClicked()
+	{
+		CloseDialog(false);
+	}
+}

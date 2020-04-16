@@ -1,0 +1,306 @@
+﻿@page "/ProcessList"
+
+<h1>Process List</h1>
+
+<style>
+
+    .bpcgridview {
+        border-collapse: collapse;
+    }
+
+        .bpcgridview thead {
+            color: #333;
+            background: #eee;
+        }
+
+        .bpcgridview th, .bpcgridview td {
+            border: solid 1px #ccc;
+            padding: 3px;
+        }
+</style>
+
+<BlazorDomTree OnRootReady="bdt_ready" />
+
+@code{
+
+    bool islinux = System.IO.Directory.Exists("/");
+
+    Dictionary<int, string> procargs = new Dictionary<int, string>();
+    string FindProcArgs(int id)
+    {
+        if (!islinux)
+            return null;
+
+        string cmdline;
+        if (procargs.TryGetValue(id, out cmdline))
+            return cmdline;
+
+        cmdline = System.IO.File.ReadAllText($"/proc/{ id }/cmdline");
+
+        if(!string.IsNullOrEmpty(cmdline))
+        {
+            int pos = cmdline.IndexOf('\0');
+            if (pos != -1)
+                cmdline = cmdline.Substring(pos + 1).Replace('\0',' ').Trim();
+        }
+
+        procargs[id] = cmdline;
+        return cmdline;
+    }
+
+    bool MatchKeyword(System.Diagnostics.Process p, string kw)
+    {
+        if (kw == "!")
+            return true;
+        if (kw.StartsWith('!'))
+            return !MatchKeyword(p, kw.Substring(1));
+        if (kw.Length == 0)
+            return true;
+        if (p.ProcessName.Contains(kw, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        string args = FindProcArgs(p.Id);
+        if (!string.IsNullOrEmpty(args) && args.Contains(kw, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        try
+        {
+            if (p.MainModule.FileName.Contains(kw, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        catch
+        {
+
+        }
+
+        return false;
+    }
+
+    void bdt_ready(BlazorDomTree bdt)
+    {
+        PlusControl toolbar = bdt.Root.Create("div");
+        PlusControl divpl = bdt.Root.Create("div");
+        PlusGridView grid = bdt.Root.Create<PlusGridView>("class='bpcgridview' style='width:100%;'");
+
+        System.Diagnostics.Process currproc = System.Diagnostics.Process.GetCurrentProcess();
+
+        grid.Columns.Add("Id").CssText("text-align:center");
+        grid.LastColumn.CellTemplate.CssText = "text-align:right";
+        grid.LastColumn.CellTemplate.GetTextHandler = (cell) =>
+        {
+            return cell.Item.DataItem.As<System.Diagnostics.Process>().Id.ToString();
+        };
+
+        grid.Columns.Add("SessionId").CssText("text-align:center");
+        grid.LastColumn.CellTemplate.CssText = "text-align:right";
+        grid.LastColumn.CellTemplate.GetTextHandler = (cell) =>
+        {
+            return cell.Item.DataItem.As<System.Diagnostics.Process>().SessionId.ToString();
+        };
+
+        grid.Columns.Add("Name").CssText("text-align:center");
+        grid.LastColumn.CellTemplate.CssText = "text-align:center;max-width:100px;overflow-x:hidden;text-overflow: ellipsis;";
+        grid.LastColumn.CellTemplate.GetTextHandler = (cell) =>
+        {
+            return cell.Item.DataItem.As<System.Diagnostics.Process>().ProcessName;
+        };
+
+        grid.Columns.Add("File");
+        grid.LastColumn.CellTemplate.RenderHandler = (cell, container) =>
+        {
+            string filename = null;
+            var p = cell.Item.DataItem.As<System.Diagnostics.Process>();
+            try
+            {
+                filename = p.MainModule.FileName;
+            }
+            catch
+            {
+                container.InnerText("");
+                return;
+            }
+            container.Attribute("title", filename);
+            if (filename.Length > 50) filename = filename.Substring(0, 24) + " ... " + filename.Substring(filename.Length - 24);
+            container.InnerText(filename);
+        };
+
+        grid.Columns.Add("Args");
+        grid.LastColumn.CellTemplate.RenderHandler = (cell, container) =>
+        {
+            string str = "";
+            var p = cell.Item.DataItem.As<System.Diagnostics.Process>();
+            str = FindProcArgs(p.Id);
+            if(str==null)
+                return;
+            container.Attribute("title", str);
+            if (str.Length > 50) str = str.Substring(0, 24) + " ... " + str.Substring(str.Length - 24);
+            container.InnerText(str);
+        };
+
+        grid.Columns.Add("CPU").CssText("text-align:center");
+        grid.LastColumn.CellTemplate.CssText = "text-align:center";
+        grid.LastColumn.CellTemplate.GetTextHandler = (cell) =>
+        {
+            try
+            {
+                return cell.Item.DataItem.As<System.Diagnostics.Process>().UserProcessorTime.ToString().Split('.')[0];
+            }
+            catch
+            {
+                return "";
+            }
+        };
+
+
+        grid.Columns.Add("Memory").CssText("text-align:right");
+        grid.LastColumn.CellTemplate.CssText = "text-align:right";
+        grid.LastColumn.CellTemplate.GetTextHandler = (cell) =>
+        {
+            long size = cell.Item.DataItem.As<System.Diagnostics.Process>().WorkingSet64;
+            if (size > 1024 * 1024)
+                return size / 1024 / 1024 + "MB";
+            return size / 1024 + "KB";
+        };
+
+        grid.Columns.Add("op").CssText("text-align:center");
+        grid.LastColumn.CellTemplate.CssText = "text-align:center";
+        grid.LastColumn.CellTemplate.RenderHandler = (cell, container) =>
+        {
+            var p = cell.Item.DataItem.As<System.Diagnostics.Process>();
+            if (currproc.Id == p.Id)
+                return;
+            container.Create("button").InnerText("kill").OnClick(delegate
+            {
+                BlazorSession.Current.ConfirmYes("KILL", "kill " + p.ProcessName + " ?", () =>
+                {
+                    try
+                    {
+                        p.Kill();
+                    }
+                    catch (Exception x)
+                    {
+                        BlazorSession.Current.Alert("Error", x.ToString());
+                        return;
+                    }
+                    grid.Items.Remove(cell.Item);
+                });
+            });
+        };
+
+        string keywords = "";
+        List<string> sorts = new List<string>();
+        bool show_sid_zero = false;
+
+        void Search()
+        {
+            var ps = System.Diagnostics.Process.GetProcesses();
+
+            if (!show_sid_zero)
+                ps = ps.Where(v => v.SessionId > 0).ToArray();
+
+            if (!string.IsNullOrWhiteSpace(keywords))
+            {
+                foreach (string eachkw in keywords.Split(' '))
+                {
+                    string kw = eachkw.Trim();
+                    if (kw.Length == 0)
+                        continue;
+                    ps = ps.Where(v => MatchKeyword(v, kw)).ToArray();
+                }
+            }
+
+            divpl.ClearChildren();
+
+            divpl.Create("div").InnerText(ps.Length + " items , current id " + currproc.Id);
+
+            grid.Items.Clear();
+
+            Array.Sort(ps, (a, b) =>
+            {
+                int c = 0;
+                foreach (string sortmode in sorts)
+                {
+                    if (sortmode == "mem")
+                        c = -a.WorkingSet64.CompareTo(b.WorkingSet64);
+                    if (sortmode == "cpu")
+                    {
+                        TimeSpan tsa = TimeSpan.Zero;
+                        TimeSpan tsb = TimeSpan.Zero;
+                        try { tsa = a.UserProcessorTime; } catch { }
+                        try { tsb = b.UserProcessorTime; } catch { }
+                        c = -tsa.CompareTo(tsb);
+                    }
+                    if (sortmode == "name")
+                        c = a.ProcessName.CompareTo(b.ProcessName);
+                    if (sortmode == "id")
+                        c = a.Id.CompareTo(b.Id);
+                    if (sortmode == "sid")
+                        c = a.SessionId.CompareTo(b.SessionId);
+
+                    if (c != 0)
+                        return c;
+                }
+                return c;
+            });
+
+            foreach (var p in ps)
+            {
+                var item = grid.Items.Add(p);
+                item.SetAttribute("onmouseover", "this.style.backgroundColor='wheat'");
+                item.SetAttribute("onmouseout", "this.style.backgroundColor=''");
+                if (currproc.Id == p.Id)
+                {
+                    item.CssText("color:red;font-weight:bold;");
+                }
+            }
+        }
+
+        void AddSort(string newsort)
+        {
+            if (string.IsNullOrEmpty(newsort))
+                return;
+            sorts.Remove(newsort);
+            sorts.Insert(0, newsort);
+        }
+
+        toolbar.Create("input type=text placeholder='Keyword'").OnChanging((sender, args) =>
+        {
+            keywords = args.Control.Value;
+            Search();
+        });
+
+        toolbar.Create("button style='margin:0 12px'").InnerText("Refresh").OnClick(delegate
+        {
+            Search();
+        });
+
+        PlusControl selsort = toolbar.Create("select style='height:30px'");
+        selsort.AddOption("Id", "id");
+        selsort.AddOption("SessionId", "sid");
+        selsort.AddOption("Name", "name");
+        selsort.AddOption("CPU", "cpu");
+        selsort.AddOption("Memory", "mem");
+        selsort.Value = "mem";
+
+        selsort.OnChange(delegate
+        {
+            AddSort(selsort.Value);
+            BlazorSession.Current.ConsoleLog("sort by :", sorts.ToArray());
+            Search();
+        });
+
+        PlusControl label_1 = toolbar.Create("label style='margin:0 12px;display:inline-block;'");
+        PlusControl cb_szero = label_1.Create("input type=checkbox");
+        label_1.Create("span").InnerText("Show-SessionId-0");
+
+        cb_szero.OnChange(delegate
+        {
+            show_sid_zero = cb_szero.Attribute_Checked;
+            Search();
+        });
+
+        AddSort(selsort.Value);
+        Search();
+
+    }
+}

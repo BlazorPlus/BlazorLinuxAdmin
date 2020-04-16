@@ -58,6 +58,12 @@
 
 @if (viewmode == "login")
 {
+    if (Environment.OSVersion.ToString().Contains("Windows"))
+    {
+        <p>Login page is for Linux ONLY</p>
+        <p>To test this app in windows, use Development environment</p>
+        return;
+    }
 
     <style>
         .label_1 {
@@ -67,15 +73,18 @@
         }
     </style>
     <div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:32px;">
-        <h1>Login</h1>
+        <h1>BlazorLinuxAdmin</h1>
         <EditForm Model="this">
-            <span class="label_1">username:</span><InputText @bind-Value="username" />
+            <span class="label_1">username:</span><InputText class="inp_username" @bind-Value="username" />
             <br />
-            <span class="label_1">password:</span><InputText @bind-Value="password" />
+            <span class="label_1">password:</span><InputText class="inp_password" @bind-Value="password" />
             <br />
             <span class="label_1"></span><button @onclick="DoLogin">Login</button>
         </EditForm>
+        <br/>
+        <h4 style="color:red;text-align:center;">Warning<br />This application is no safe<br />Don't use it for public network</h4>
     </div>
+
     return;
 }
 
@@ -91,11 +100,13 @@
         if (string.IsNullOrWhiteSpace(username))
         {
             BlazorSession.Current.Toast("Require username");
+            BlazorSession.Current.EvalCode("document.querySelector('.inp_username').focus()");
             return;
         }
         if (string.IsNullOrWhiteSpace(password))
         {
             BlazorSession.Current.Toast("Require password");
+            BlazorSession.Current.EvalCode("document.querySelector('.inp_password').focus()");
             return;
         }
 

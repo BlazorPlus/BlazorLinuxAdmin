@@ -1,0 +1,128 @@
+﻿@inherits UIDialogPromptBase
+
+<div style="min-width:360px;margin:12px 24px;padding:24px;background-color:white;border-radius:12px;box-shadow:#999 5px 5px 15px;text-align:center">
+	<h3 class="text-info">@Option.RenderTitle()</h3>
+	<p>
+		@Option.RenderMessage()
+	</p>
+	<input type="text" @ref="inp" style="width:80%;padding-left:0.3em" />
+	<hr />
+	<button class="@OKButtonClass" @attributes="GetBtnAttr()" @ref="btnok" @onclick="OKClicked">@Option.OKText</button>
+	&nbsp;&nbsp;&nbsp;
+	<button class="btn btn-info" style="min-width:90px" @ref="btncancel" @onclick="CancelClicked">@Option.CancelText</button>
+</div>
+
+<BlazorInteropObject @ref="bs" />
+
+@code
+{
+	string OKButtonClass
+	{
+		get
+		{
+			switch (Option.OKType)
+			{
+				case UIDialogOptionActionType.Danger:
+					return "btn btn-danger";
+				default:
+					return "btn btn-primary";
+			}
+		}
+	}
+
+	BlazorInteropObject bs;
+
+	public string Value { get; set; }
+
+	protected override void OnSetOption()
+	{
+		if (Option.OKText == null)
+			Option.OKText = "OK";
+		if (Option.CancelText == null)
+			Option.CancelText = "Cancel";
+
+		SetValue(Option.DefaultValue);
+	}
+
+	ElementReference btnok;
+	ElementReference btncancel;
+
+	ElementReference inp;
+
+	bool ValueIsOK = false;
+
+	Dictionary<string, object> GetBtnAttr()
+	{
+		Dictionary<string, object> dict = new Dictionary<string, object>();
+		dict["style"] = "min-width:90px";
+		if (!ValueIsOK)
+		{
+			dict["disabled"] = true;
+			dict["style"] = "min-width:90px;opacity:0.2";
+		}
+		return dict;
+	}
+
+	void SetValue(object val)
+	{
+		Value = Convert.ToString(val);
+		if (Option.ValueValidator != null)
+			ValueIsOK = Option.ValueValidator(Value);
+		else
+			ValueIsOK = !string.IsNullOrWhiteSpace(Value);
+		StateHasChanged();
+	}
+
+	protected override void OnAfterRender(bool firstRender)
+	{
+		BlazorSession.Current.Focus(inp);
+
+		if (!firstRender)
+			return;
+
+
+		bs.ClientEvent += (sender, evt) =>
+		{
+			if (evt.Name == "SetValue")
+			{
+				SetValue(evt.Arguments[0]);
+			}
+			if (evt.Name == "EnterKey")
+			{
+				OKClicked();
+			}
+		};
+
+		bs.Eval(@"
+var bs=this;
+var inp=arguments[0];
+inp.value=arguments[1];
+var oldval=inp.value;
+function checkchanging(){
+if(inp.value==oldval)return;
+oldval=inp.value;
+bs.ClientEvent('SetValue',[inp.value]);
+}
+inp.onkeyup=checkchanging;
+inp.onchange=checkchanging;
+inp.onkeydown=function(e)
+{
+if(e.keyCode!=13)return;
+bs.ClientEvent('EnterKey',[]);
+}
+", inp, Value);
+
+
+	}
+
+	void OKClicked()
+	{
+		if (ValueIsOK)
+			CloseDialog(Value);
+	}
+
+	void CancelClicked()
+	{
+		CloseDialog(null);
+	}
+}

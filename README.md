@@ -1,18 +1,20 @@
 # BlazorLinuxAdmin
 
-
-# Progresss v0.0.4 Better Console (Linux & Win)
-
 Just a tool for :
 
-1 - How to run Blazor server-side in linux 
+1 - Demo to run Blazor server-side in linux 
 
 2 - Manage linux as more as possible
 
-![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/BlazorLinuxAdmin.png)
+# Progresss v0.0.5 Process List / Kill
 
-![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/BlazorLinuxAdmin-FileTree.png)
+![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin.png)
 
+![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin-FileTree.png)
+
+![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin-ProcList.png)
+
+Progresss v0.0.4 Better Console (Linux & Win)
 
 Progresss v0.0.3 - File Tree
 
