@@ -6,7 +6,7 @@ Just a tool for :
 
 2 - Manage linux as more as possible
 
-# Progresss v0.0.5 Process List / Kill
+# Progresss v0.0.6 - Raspbarry Pi GPIO
 
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin.png)
 
@@ -14,7 +14,11 @@ Just a tool for :
 
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin-ProcList.png)
 
-Progresss v0.0.4 Better Console (Linux & Win)
+![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin-GPIO.png)
+
+Progresss v0.0.5 - Process List / Kill
+
+Progresss v0.0.4 - Better Console (Linux & Win)
 
 Progresss v0.0.3 - File Tree
 

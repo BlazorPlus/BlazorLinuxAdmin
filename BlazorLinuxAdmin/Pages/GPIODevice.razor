@@ -1,0 +1,327 @@
+﻿@page "/GPIODevice"
+
+@implements IDisposable
+
+@code{
+
+    //Board for Pin# 01-40 , Logical for GPIO-01 to GPIO-27 
+    System.Device.Gpio.PinNumberingScheme pin_num_schema = System.Device.Gpio.PinNumberingScheme.Board;
+
+    System.Device.Gpio.GpioController gpioctrl = null;
+    Exception gpioerr = null;
+
+    void IDisposable.Dispose()
+    {
+        if (gpioctrl != null)
+            gpioctrl.Dispose();
+    }
+
+    void ChangePinMode()
+    {
+        if (pin_num_schema == System.Device.Gpio.PinNumberingScheme.Board)
+            pin_num_schema = System.Device.Gpio.PinNumberingScheme.Logical;
+        else
+            pin_num_schema = System.Device.Gpio.PinNumberingScheme.Board;
+        gpioctrl.Dispose();
+        gpioctrl = null;
+    }
+}
+
+@{
+    if (gpioctrl == null)
+    {
+        try
+        {
+            System.Device.Gpio.GpioDriver driver = new System.Device.Gpio.Drivers.RaspberryPi3Driver();
+            gpioctrl = new System.Device.Gpio.GpioController(pin_num_schema, driver);
+        }
+        catch (Exception x)
+        {
+            gpioerr = x;
+        }
+    }
+}
+
+<h1>GPIO Device , Raspberry Pi</h1>
+
+@if (gpioctrl != null)
+{
+    <div>
+        GPIO Count: <span style="color:red;font-weight:bold">@gpioctrl.PinCount</span>
+        &nbsp;&nbsp;
+        PinMode: <span style="color:red;font-weight:bold">PinNumberingScheme.@gpioctrl.NumberingScheme</span>
+        &nbsp;&nbsp;
+        <button @onclick="ChangePinMode">Change To @(gpioctrl.NumberingScheme == System.Device.Gpio.PinNumberingScheme.Board?"Logical":"Board")</button>
+    </div>
+}
+else
+{
+    <div> GPIO Error : @gpioerr.Message</div>
+    <div style="color:red">Make sure this application are running in Raspberry Pi </div>
+}
+
+<hr />
+<div>
+    @{
+        GetPins();
+
+        List<PinInfo[]> pairs = new List<PinInfo[]>();
+        for (int i = 0; i < ___pins.Length; i += 2)
+        {
+            pairs.Add(new PinInfo[] { ___pins[i], ___pins[i + 1] });
+
+        }
+    }
+    <style>
+        .raspberrypilayer {
+            position: absolute;
+            width: 847px;
+            height: 1250px;
+            background-image: url(/raspberrypi.jpg);
+            right: -88px;
+            top: -135px;
+            background-repeat: no-repeat;
+            background-position: top right;
+            z-index: -1;
+            background-size: 847px 1250px;
+            opacity: 0.1;
+        }
+    </style>
+    <div style="display:flex;border-bottom:solid 1px #999">
+        <div class="pinleft" style="position:relative">
+            <div class="raspberrypilayer"></div>
+            <span class="pinnum">Pin#</span>
+            <span class="pinname">Name</span>
+            <span class="pinalt">Info</span>
+            <span class="pinaction"></span>
+            <span class="pinicon" style="height:15px;align-self:flex-end;border-top:solid 1px black;border-top-left-radius:7px"></span>
+        </div>
+        <div class="pinright">
+            <span class="pinnum">Pin#</span>
+            <span class="pinname">Name</span>
+            <span class="pinalt">Info</span>
+            <span class="pinaction"></span>
+            <span class="pinicon" style="height:15px;align-self:flex-end;border-top:solid 1px black;border-top-right-radius:7px"></span>
+        </div>
+    </div>
+
+    @foreach (var pair in pairs)
+    {
+        <div style="display:flex;border-bottom:solid 1px #999;padding:5px 0 3px 0;">
+            @foreach (var pin in pair)
+            {
+                string divclass = "pin" + pin.Index + " " + (pin.Index % 2 == 1 ? "pinleft" : "pinright");
+                string alt = "";
+                if (!string.IsNullOrEmpty(pin.Alt))
+                    alt = "(" + pin.Alt + ")";
+
+                string pinnumstyle = "";
+                string pinnamestyle = "";
+                if (pin.Name.StartsWith("GPIO-"))
+                {
+                    if (pin_num_schema == System.Device.Gpio.PinNumberingScheme.Board)
+                        pinnumstyle = "font-weight:bold;";
+                    else
+                        pinnamestyle = "font-weight:bold;";
+                }
+
+                <div class="@divclass">
+                    <span class="pinnum" style="@pinnumstyle">@pin.Index.ToString().PadLeft(2, '0')</span>
+                    <span class="pinname" style="@pinnamestyle">@pin.Name</span>
+                    <span class="pinalt">@alt</span>
+                    <BlazorDomTree TagName="span" @key="gpioctrl" class="pinaction" OnRootReady="(bdt)=>CreateAction(bdt,pin)"></BlazorDomTree>
+                    <span class="pinicon">
+                        <span class=piniconspan style='@("background-color:" + pin.Color)'>
+                            <i></i>
+                        </span>
+                    </span>
+                </div>
+            }
+        </div>
+    }
+
+    <div style="display:flex;">
+        <div class="pinleft">
+            <span class="pinnum">Board</span><span class="pinname">Logical</span><span class="pinalt"></span><span class="pinaction"></span>
+            <span class="pinicon" style="height:15px;align-self:flex-start;border-bottom:solid 1px black;border-bottom-left-radius:7px"></span>
+        </div>
+        <div class="pinright">
+            <span class="pinnum">Board</span><span class="pinname">Logical</span><span class="pinalt"></span><span class="pinaction"></span>
+            <span class="pinicon" style="height:15px;align-self:flex-start;border-bottom:solid 1px black;border-bottom-right-radius:7px"></span>
+        </div>
+    </div>
+
+</div>
+
+<br />
+<p>Tips :  user CTRL+Click to flash the GPIO</p>
+<br />
+<br />
+
+@code {
+
+    void CreateAction(BlazorDomTree bdt, PinInfo pin)
+    {
+        if (!pin.Name.StartsWith("GPIO"))
+            return;
+
+        PlusControl divgroup = bdt.Root.Create("div class='actiongroup'");
+        PlusControl btnoff = divgroup.Create("span").InnerText("OFF");
+        PlusControl btnon = divgroup.Create("span").InnerText("ON");
+
+        bool SetGpioState(bool state_on)
+        {
+            if (gpioctrl == null)
+            {
+                BlazorSession.Current.Alert("Error", gpioerr.Message);
+                return false;
+            }
+
+            try
+            {
+                string toastmsg;
+                int gpio_num = pin.Index;
+                if (gpioctrl.NumberingScheme == System.Device.Gpio.PinNumberingScheme.Logical)
+                {
+                    //use GPIO-XX
+                    gpio_num = int.Parse(pin.Name.Replace("GPIO-", ""));
+                    toastmsg = "Set " + pin.Name + " to " + (state_on ? 1 : 0);
+                }
+                else
+                {
+                    //use Pin# for PinNumberingScheme.Board
+                    gpio_num = pin.Index;
+                    toastmsg = "Set Pin#" + pin.Index.ToString().PadLeft(2, '0') + " to " + (state_on ? 1 : 0);
+                }
+
+                BlazorSession.Current.Toast(toastmsg, 2000, "setgpioinfo");
+
+                if (!gpioctrl.IsPinOpen(gpio_num))
+                {
+                    gpioctrl.OpenPin(gpio_num);
+                    gpioctrl.SetPinMode(gpio_num, System.Device.Gpio.PinMode.Output);
+                }
+                gpioctrl.Write(gpio_num, state_on ? System.Device.Gpio.PinValue.High : System.Device.Gpio.PinValue.Low);
+                return true;
+            }
+            catch (Exception x)
+            {
+                BlazorSession.Current.Alert("Error", x.ToString());
+                return false;
+            }
+        }
+
+        string _flash_next_id = null;
+
+        void ButtonClick(bool state_on, bool flashmode)
+        {
+            if (!SetGpioState(state_on))
+                return;
+            if (state_on)
+            {
+                btnon.Style("background-color", "green");
+                btnoff.Style("background-color", "#ccc");
+            }
+            else
+            {
+                btnoff.Style("background-color", "green");
+                btnon.Style("background-color", "#ccc");
+            }
+
+            _flash_next_id = null;
+            if (!flashmode)
+                return;
+
+            string flashid = Guid.NewGuid().ToString();
+            _flash_next_id = flashid;
+            var flashgpioctrl = gpioctrl;
+            BlazorSession.Current.SetTimeout(300, delegate
+            {
+                if (_flash_next_id != flashid || flashgpioctrl != gpioctrl)
+                    return;
+                ButtonClick(!state_on, true);
+            });
+        }
+
+        btnoff.OnClick((sender, args) =>
+        {
+            ButtonClick(false, args.JSEvent.ctrlKey);
+        });
+        btnon.OnClick((sender, args) =>
+        {
+            ButtonClick(true, args.JSEvent.ctrlKey);
+        });
+    }
+}
+
+@code{
+
+    class PinInfo
+    {
+        public int Index;
+        public string Name;
+        public string Alt;
+        public string Color;
+    }
+
+    PinInfo[] ___pins;
+    PinInfo[] GetPins()
+    {
+        if (___pins != null)
+            return ___pins;
+        List<PinInfo> list = new List<PinInfo>();
+        void AddPin(int index, string color, string name, string alt)
+        {
+            list.Add(new PinInfo { Index = index, Color = color, Name = name, Alt = alt });
+        }
+
+        AddPin(1, "darkred", "3.3v", "DC Power");
+        AddPin(3, "deepskyblue", "GPIO-02", "SDA1,I2C");
+        AddPin(5, "deepskyblue", "GPIO-03", "SCL1,I2C");
+        AddPin(7, "green", "GPIO-04", "GPIO_GCLK");
+        AddPin(9, "black", "Ground", "");
+        AddPin(11, "green", "GPIO-17", "GPIO_GEN0");
+        AddPin(13, "green", "GPIO-27", "GPIO_GEN2");
+        AddPin(15, "green", "GPIO-22", "GPIO_GEN3");
+        AddPin(17, "red", "3.3v", "DC Power");
+        AddPin(19, "purple", "GPIO-10", "SPI_MOSI");
+        AddPin(21, "purple", "GPIO-09", "SPI_MISO");
+        AddPin(23, "purple", "GPIO-11", "SPI_CLK");
+        AddPin(25, "black", "Ground", "");
+        AddPin(27, "yellow", "GPIO-00", "ID_SD");
+        AddPin(29, "green", "GPIO-05", "");
+        AddPin(31, "green", "GPIO-06", "");
+        AddPin(33, "green", "GPIO-13", "");
+        AddPin(35, "green", "GPIO-19", "");
+        AddPin(37, "green", "GPIO-26", "");
+        AddPin(39, "black", "Ground", "");
+
+        AddPin(2, "red", "5v", "DC Power");
+        AddPin(4, "red", "5v", "DC Power");
+        AddPin(6, "black", "Ground", "");
+        AddPin(8, "orange", "GPIO-14", "TXD0");
+        AddPin(10, "orange", "GPIO-15", "RXD0");
+        AddPin(12, "green", "GPIO-18", "GEIO_GEN1");
+        AddPin(14, "black", "Ground", "");
+        AddPin(16, "green", "GPIO-23", "GEIO_GEN4");
+        AddPin(18, "green", "GPIO-24", "GEIO_GEN5");
+        AddPin(20, "black", "Ground", "");
+        AddPin(22, "green", "GPIO-25", "GEIO_GEN6");
+        AddPin(24, "purple", "GPIO-08", "SPI_CE0_N");
+        AddPin(26, "purple", "GPIO-07", "SPI_CE1_N");
+        AddPin(28, "yellow", "GPIO-01", "ID_SC");
+        AddPin(30, "black", "Ground", "");
+        AddPin(32, "green", "GPIO-12", "");
+        AddPin(34, "black", "Ground", "");
+        AddPin(36, "green", "GPIO-16", "");
+        AddPin(38, "green", "GPIO-20", "");
+        AddPin(40, "green", "GPIO-21", "");
+
+        ___pins = list.OrderBy(v => v.Index).ToArray();
+        return ___pins;
+
+    }
+
+}
+
+

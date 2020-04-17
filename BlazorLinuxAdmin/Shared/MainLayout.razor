@@ -60,8 +60,17 @@
 {
     if (Environment.OSVersion.ToString().Contains("Windows"))
     {
-        <p>Login page is for Linux ONLY</p>
-        <p>To test this app in windows, use Development environment</p>
+<div style="text-align:center;padding:32px;width:360px;margin:auto">
+    <h3>Windows + Production</h3>
+    <h3>Is Disabled for secure</h3>
+    <p>To test BlazorLinuxAdmin in windows</p>
+    <p>set </p>
+    <p>ASPNETCORE_ENVIRONMENT=Development</p>
+    <p>Example bat file : </p>
+    <pre style="text-align:left;width:280px;overflow:visible;display:inline-block;font-size:12px">
+SET ASPNETCORE_ENVIRONMENT=Development
+BlazorLinuxAdmin.exe</pre>
+</div>
         return;
     }
 
@@ -77,11 +86,11 @@
         <EditForm Model="this">
             <span class="label_1">username:</span><InputText class="inp_username" @bind-Value="username" />
             <br />
-            <span class="label_1">password:</span><InputText class="inp_password" @bind-Value="password" />
+            <span class="label_1">password:</span><InputText class="inp_password" type="password" @bind-Value="password" />
             <br />
             <span class="label_1"></span><button @onclick="DoLogin">Login</button>
         </EditForm>
-        <br/>
+        <br />
         <h4 style="color:red;text-align:center;">Warning<br />This application is no safe<br />Don't use it for public network</h4>
     </div>
 

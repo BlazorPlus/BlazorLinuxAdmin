@@ -23,7 +23,7 @@
 
 @code{
 
-    bool islinux = System.IO.Directory.Exists("/");
+    bool islinux = !Environment.OSVersion.ToString().Contains("Windows");
 
     Dictionary<int, string> procargs = new Dictionary<int, string>();
     string FindProcArgs(int id)
