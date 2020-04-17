@@ -23,12 +23,12 @@
 
 @code{
 
-    bool islinux = !Environment.OSVersion.ToString().Contains("Windows");
+    bool isunix = !Environment.OSVersion.ToString().Contains("Windows");
 
     Dictionary<int, string> procargs = new Dictionary<int, string>();
     string FindProcArgs(int id)
     {
-        if (!islinux)
+        if (!isunix)
             return null;
 
         string cmdline;

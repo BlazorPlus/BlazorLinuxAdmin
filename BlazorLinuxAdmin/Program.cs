@@ -25,9 +25,11 @@ namespace BlazorLinuxAdmin
 
         static bool IsKestrelMode()
         {
-            if (pname == "w3wp")
+            if (pname == "w3wp" || pname == "iisexpress")//IIS or IIS Express
                 return false;
-            if (pname == "dotnet")
+            if (pname == "dotnet")  //run directly
+                return true;
+            if (Environment.OSVersion.Platform == PlatformID.Unix)
                 return true;
             if (pname == typeof(Program).Assembly.GetName().Name)
                 return true;
