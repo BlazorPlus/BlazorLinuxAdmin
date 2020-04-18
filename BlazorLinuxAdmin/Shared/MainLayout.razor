@@ -2,6 +2,9 @@
 
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment whe
 
+@code{
+    bool AllowEnterDirectlyInDevMode = false;
+}
 
 @if (BlazorSession.Current.Browser == null)
 {
@@ -24,13 +27,7 @@
 {
     if (BlazorSession.Current.Browser.GetMemoryItem("LogonOK") as string != "OK")
     {
-        if (whe.EnvironmentName != "Development")
-        {
-            username = BlazorSession.Current.Browser.GetMemoryItem("console_username") as string;
-            password = BlazorSession.Current.Browser.GetMemoryItem("console_password") as string;
-            viewmode = "login";
-        }
-        else
+        if (AllowEnterDirectlyInDevMode && whe.EnvironmentName == "Development")
         {
             void LoginForDev()
             {
@@ -53,26 +50,32 @@
             </div>
             return;
         }
+        else
+        {
+            username = BlazorSession.Current.Browser.GetMemoryItem("console_username") as string;
+            password = BlazorSession.Current.Browser.GetMemoryItem("console_password") as string;
+            viewmode = "login";
+        }
     }
 }
 
 @if (viewmode == "login")
 {
-    if (Environment.OSVersion.ToString().Contains("Windows"))
-    {
-<div style="text-align:center;padding:32px;width:360px;margin:auto">
-    <h3>Windows + Production</h3>
-    <h3>Is Disabled for secure</h3>
-    <p>To test BlazorLinuxAdmin in windows</p>
-    <p>set </p>
-    <p>ASPNETCORE_ENVIRONMENT=Development</p>
-    <p>Example bat file : </p>
-    <pre style="text-align:left;width:280px;overflow:visible;display:inline-block;font-size:12px">
-SET ASPNETCORE_ENVIRONMENT=Development
-BlazorLinuxAdmin.exe</pre>
-</div>
-        return;
-    }
+    @*if (Environment.OSVersion.ToString().Contains("Windows"))
+            {
+                <div style="text-align:center;padding:32px;width:360px;margin:auto">
+                    <h3>Windows + Production</h3>
+                    <h3>Is Disabled for secure</h3>
+                    <p>To test BlazorLinuxAdmin in windows</p>
+                    <p>set </p>
+                    <p>ASPNETCORE_ENVIRONMENT=Development</p>
+                    <p>Example bat file : </p>
+                    <pre style="text-align:left;width:280px;overflow:visible;display:inline-block;font-size:12px">
+        SET ASPNETCORE_ENVIRONMENT=Development
+        BlazorLinuxAdmin.exe</pre>
+                </div>
+                return;
+            }*@
 
     <style>
         .label_1 {
@@ -83,6 +86,7 @@ BlazorLinuxAdmin.exe</pre>
     </style>
     <div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:32px;">
         <h1>BlazorLinuxAdmin</h1>
+        <h3>OS : @Environment.OSVersion + @(Environment.Is64BitOperatingSystem?"64bit":"32bit")</h3>
         <EditForm Model="this">
             <span class="label_1">username:</span><InputText class="inp_username" @bind-Value="username" />
             <br />
@@ -118,6 +122,48 @@ BlazorLinuxAdmin.exe</pre>
             BlazorSession.Current.EvalCode("document.querySelector('.inp_password').focus()");
             return;
         }
+
+        username = username.Trim();
+
+        if (Environment.OSVersion.Platform == PlatformID.Unix)
+        {
+            DoLogin_Unix();
+        }
+        else if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+        {
+            DoLogin_WinNT();
+        }
+        else
+        {
+            BlazorSession.Current.Alert("Error", "Not Support");
+        }
+    }
+
+    void DoLogin_WinNT()
+    {
+        if (string.Equals(username, "Administrator", StringComparison.OrdinalIgnoreCase))
+        {
+            BlazorSession.Current.Alert("Error", "Not allow Administrator, try another user.");
+            return;
+        }
+
+        using (var pc = new System.DirectoryServices.AccountManagement.PrincipalContext(System.DirectoryServices.AccountManagement.ContextType.Machine))
+        {
+            bool isok = pc.ValidateCredentials(username, password);
+            if (!isok)
+            {
+                BlazorSession.Current.Alert("Error", "Invalid Credentials");
+            }
+            else
+            {
+                BlazorSession.Current.Browser.SetMemoryItem("LogonOK", "OK");
+                viewmode = null;
+            }
+        }
+    }
+
+    void DoLogin_Unix()
+    {
 
         Renci.SshNet.SshClient client = new Renci.SshNet.SshClient("localhost", username, password);
 

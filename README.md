@@ -2,11 +2,13 @@
 
 Just a tool for :
 
-1 - Demo to run Blazor server-side in linux 
+1 - Demo to run Blazor server-side in linux/macosx/windows
 
-2 - Manage linux as more as possible
+2 - Manage system as more as possible
 
-# Progresss v0.0.6 - Raspbarry Pi GPIO
+# Support Linux/MacOSX/Windows Now.
+
+# Progresss v0.0.7 - Support Windows Login
 
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin.png)
 
@@ -15,6 +17,8 @@ Just a tool for :
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin-ProcList.png)
 
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin-GPIO.png)
+
+Progresss v0.0.6 - Raspbarry Pi GPIO
 
 Progresss v0.0.5 - Process List / Kill
 
