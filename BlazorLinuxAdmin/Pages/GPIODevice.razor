@@ -59,22 +59,22 @@
 
 @if (gpioctrl != null)
 {
-<div>
-    GPIO Count: <span style="color:red;font-weight:bold">@gpioctrl.PinCount</span>
-    &nbsp;&nbsp;
-    Mode: <span style="color:red;font-weight:bold">PinNumberingScheme.@gpioctrl.NumberingScheme</span>
-    &nbsp;&nbsp;
-    <button @onclick="ChangePinMode">Change To @(gpioctrl.NumberingScheme == System.Device.Gpio.PinNumberingScheme.Board?"Logical":"Board")</button>
-    &nbsp;&nbsp;
-    CaptureMode :
-    <select @onchange="SelectPinMode">
-        @foreach (string mode in new string[] { "Input", "InputPullDown", "InputPullUp" })
+    <div>
+        GPIO Count: <span style="color:red;font-weight:bold">@gpioctrl.PinCount</span>
+        &nbsp;&nbsp;
+        Mode: <span style="color:red;font-weight:bold">PinNumberingScheme.@gpioctrl.NumberingScheme</span>
+        &nbsp;&nbsp;
+        <button @onclick="ChangePinMode">Change To @(gpioctrl.NumberingScheme == System.Device.Gpio.PinNumberingScheme.Board?"Logical":"Board")</button>
+        &nbsp;&nbsp;
+        CaptureMode :
+        <select @onchange="SelectPinMode">
+            @foreach (string mode in new string[] { "Input", "InputPullDown", "InputPullUp" })
             {
-        <option value="@mode">@mode</option>
+                <option value="@mode">@mode</option>
             }
-    </select>
+        </select>
 
-</div>
+    </div>
 }
 else
 {
@@ -207,20 +207,20 @@ else
         }
 
         PlusControl divgroup = bdt.Root.Create("div class='actiongroup'");
-        PlusControl btnoff = divgroup.Create("span style='opacity:0.6'").InnerText("OFF");
-        PlusControl btnon = divgroup.Create("span style='font-weight:bold;color:red'").InnerText("ON");
+        PlusControl btnoff = divgroup.Create("span").InnerText("OFF");
+        PlusControl btnon = divgroup.Create("span").InnerText("ON");
 
         void SetStateColor(bool state_on, string color)
         {
             if (state_on)
             {
-                btnon.Style("background-color", color);
-                btnoff.Style("background-color", "#ccc");
+                btnon.RuntimeCssText("font-weight:bold;color:red;background-color:" + color, true);
+                btnoff.RuntimeCssText("opacity:0.6;background-color:#ccc", true);
             }
             else
             {
-                btnoff.Style("background-color", color);
-                btnon.Style("background-color", "#ccc");
+                btnon.RuntimeCssText("background-color:#ccc", true);
+                btnoff.RuntimeCssText("opacity:0.6;background-color:" + color, true);
             }
         }
 
