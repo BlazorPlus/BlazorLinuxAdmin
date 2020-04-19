@@ -4,8 +4,10 @@
 
 @code{
 
-    //Board for Pin# 01-40 , Logical for GPIO-01 to GPIO-27 
+    //Board for Pin# 01-40 , Logical for GPIO-01 to GPIO-27
     System.Device.Gpio.PinNumberingScheme pin_num_schema = System.Device.Gpio.PinNumberingScheme.Board;
+
+    System.Device.Gpio.PinMode capture_mode = System.Device.Gpio.PinMode.Input;
 
     System.Device.Gpio.GpioController gpioctrl = null;
     Exception gpioerr = null;
@@ -14,7 +16,7 @@
     {
         if (gpioctrl != null)
             gpioctrl.Dispose();
-        gpioctrl=null;
+        gpioctrl = null;
     }
 
     void ChangePinMode()
@@ -26,6 +28,14 @@
         gpioctrl.Dispose();
         gpioctrl = null;
     }
+
+    void SelectPinMode(ChangeEventArgs args)
+    {
+        capture_mode = Enum.Parse<System.Device.Gpio.PinMode>(Convert.ToString(args.Value));
+        gpioctrl.Dispose();
+        gpioctrl = null;
+        BlazorSession.Current.Toast("set to " + capture_mode);
+    }
 }
 
 @{
@@ -35,6 +45,8 @@
         {
             System.Device.Gpio.GpioDriver driver = new System.Device.Gpio.Drivers.RaspberryPi3Driver();
             gpioctrl = new System.Device.Gpio.GpioController(pin_num_schema, driver);
+
+            captureallitems.Clear();
         }
         catch (Exception x)
         {
@@ -47,13 +59,22 @@
 
 @if (gpioctrl != null)
 {
-    <div>
-        GPIO Count: <span style="color:red;font-weight:bold">@gpioctrl.PinCount</span>
-        &nbsp;&nbsp;
-        PinMode: <span style="color:red;font-weight:bold">PinNumberingScheme.@gpioctrl.NumberingScheme</span>
-        &nbsp;&nbsp;
-        <button @onclick="ChangePinMode">Change To @(gpioctrl.NumberingScheme == System.Device.Gpio.PinNumberingScheme.Board?"Logical":"Board")</button>
-    </div>
+<div>
+    GPIO Count: <span style="color:red;font-weight:bold">@gpioctrl.PinCount</span>
+    &nbsp;&nbsp;
+    Mode: <span style="color:red;font-weight:bold">PinNumberingScheme.@gpioctrl.NumberingScheme</span>
+    &nbsp;&nbsp;
+    <button @onclick="ChangePinMode">Change To @(gpioctrl.NumberingScheme == System.Device.Gpio.PinNumberingScheme.Board?"Logical":"Board")</button>
+    &nbsp;&nbsp;
+    CaptureMode :
+    <select @onchange="SelectPinMode">
+        @foreach (string mode in new string[] { "Input", "InputPullDown", "InputPullUp" })
+            {
+        <option value="@mode">@mode</option>
+            }
+    </select>
+
+</div>
 }
 else
 {
@@ -70,10 +91,11 @@ else
         for (int i = 0; i < ___pins.Length; i += 2)
         {
             pairs.Add(new PinInfo[] { ___pins[i], ___pins[i + 1] });
-
         }
+
     }
     <style>
+
         .raspberrypilayer {
             position: absolute;
             width: 847px;
@@ -155,7 +177,10 @@ else
 </div>
 
 <br />
-<p>Tips :  use CTRL+Click to flash the GPIO</p>
+<p style="color:blue">Tips :  use CTRL+Click to flash the GPIO</p>
+<p style="color:blue">Tips :  use double Click to flash the GPIO</p>
+<p style="color:blue">Tips :  use ALT+Click to capture the GPIO <button @onclick="CaptureAll">Capture All</button></p>
+
 <br />
 <br />
 
@@ -166,9 +191,73 @@ else
         if (!pin.Name.StartsWith("GPIO"))
             return;
 
+        int gpio_num = pin.Index;
+        string pin_name;
+        if (gpioctrl.NumberingScheme == System.Device.Gpio.PinNumberingScheme.Logical)
+        {
+            //use GPIO-XX
+            gpio_num = int.Parse(pin.Name.Replace("GPIO-", ""));
+            pin_name = pin.Name;
+        }
+        else
+        {
+            //use Pin# for PinNumberingScheme.Board
+            gpio_num = pin.Index;
+            pin_name = "PIN#" + pin.Index;
+        }
+
         PlusControl divgroup = bdt.Root.Create("div class='actiongroup'");
-        PlusControl btnoff = divgroup.Create("span").InnerText("OFF");
-        PlusControl btnon = divgroup.Create("span").InnerText("ON");
+        PlusControl btnoff = divgroup.Create("span style='opacity:0.6'").InnerText("OFF");
+        PlusControl btnon = divgroup.Create("span style='font-weight:bold;color:red'").InnerText("ON");
+
+        void SetStateColor(bool state_on, string color)
+        {
+            if (state_on)
+            {
+                btnon.Style("background-color", color);
+                btnoff.Style("background-color", "#ccc");
+            }
+            else
+            {
+                btnoff.Style("background-color", color);
+                btnon.Style("background-color", "#ccc");
+            }
+        }
+
+        //System.Threading.CancellationTokenSource cts_capture = null;
+        bool _callbackadded = false;
+
+        bool EnsurePinOpen(System.Device.Gpio.PinMode pinmode)
+        {
+            //if (cts_capture != null)
+            //{
+            //    cts_capture.Cancel();
+            //    cts_capture = null;
+            //}
+
+            if (!gpioctrl.IsPinOpen(gpio_num))
+            {
+                gpioctrl.OpenPin(gpio_num);
+                if (!gpioctrl.IsPinOpen(gpio_num))
+                    return false;
+
+                gpioctrl.SetPinMode(gpio_num, pinmode);
+            }
+            else if (gpioctrl.GetPinMode(gpio_num) != pinmode)
+            {
+                gpioctrl.SetPinMode(gpio_num, pinmode);
+            }
+
+            //only allow this when in opened.
+            if (_callbackadded)
+            {
+                _callbackadded = false;
+                gpioctrl.UnregisterCallbackForPinValueChangedEvent(gpio_num, __capture_callback);
+            }
+
+            return true;
+
+        }
 
         bool SetGpioState(bool state_on)
         {
@@ -180,28 +269,14 @@ else
 
             try
             {
-                string toastmsg;
-                int gpio_num = pin.Index;
-                if (gpioctrl.NumberingScheme == System.Device.Gpio.PinNumberingScheme.Logical)
+                if (!EnsurePinOpen(System.Device.Gpio.PinMode.Output))
                 {
-                    //use GPIO-XX
-                    gpio_num = int.Parse(pin.Name.Replace("GPIO-", ""));
-                    toastmsg = "Set " + pin.Name + " to " + (state_on ? 1 : 0);
-                }
-                else
-                {
-                    //use Pin# for PinNumberingScheme.Board
-                    gpio_num = pin.Index;
-                    toastmsg = "Set Pin#" + pin.Index.ToString().PadLeft(2, '0') + " to " + (state_on ? 1 : 0);
+                    BlazorSession.Current.Toast("Failed open " + pin_name);
+                    return false;
                 }
 
-                BlazorSession.Current.Toast(toastmsg, 2000, "setgpioinfo");
+                BlazorSession.Current.Toast("Set " + pin_name + " to " + (state_on ? 1 : 0), 2000, "setgpioinfo");
 
-                if (!gpioctrl.IsPinOpen(gpio_num))
-                {
-                    gpioctrl.OpenPin(gpio_num);
-                    gpioctrl.SetPinMode(gpio_num, System.Device.Gpio.PinMode.Output);
-                }
                 gpioctrl.Write(gpio_num, state_on ? System.Device.Gpio.PinValue.High : System.Device.Gpio.PinValue.Low);
                 return true;
             }
@@ -212,22 +287,80 @@ else
             }
         }
 
+
+        void CaptureGpio()
+        {
+            EnsurePinOpen(capture_mode);
+
+            BlazorSession.Current.Toast("Capture " + pin_name, 2000, "setgpioinfo");
+
+            btnon.Style("background-color", "#ccc");
+            btnoff.Style("background-color", "#ccc");
+
+            //var t = CaptureWorkAsync();
+
+            gpioctrl.RegisterCallbackForPinValueChangedEvent(gpio_num, System.Device.Gpio.PinEventTypes.Falling | System.Device.Gpio.PinEventTypes.Rising, __capture_callback);
+            _callbackadded = true;
+
+            SetColorFromPinValue();
+        }
+
+        void SetColorFromPinValue()
+        {
+            var pinvalue = gpioctrl.Read(gpio_num);
+            if (pinvalue == System.Device.Gpio.PinValue.High)
+            {
+                SetStateColor(true, "orange");
+            }
+            if (pinvalue == System.Device.Gpio.PinValue.Low)
+            {
+                SetStateColor(false, "orange");
+            }
+        }
+
+        void __capture_callback(object sender, System.Device.Gpio.PinValueChangedEventArgs args)
+        {
+            SetColorFromPinValue();
+        }
+
+        //async Task CaptureWorkAsync()
+        //{
+        //    cts_capture = new System.Threading.CancellationTokenSource();
+        //    System.Threading.CancellationTokenSource cts_last = cts_capture;
+
+        //    while (gpioctrl != null && cts_last == cts_capture)
+        //    {
+        //        SetColorFromPinValue();
+
+        //        await Task.Delay(100);
+        //        continue;
+
+        //        ////do not use this way
+        //        //try
+        //        //{
+        //        //    var result = await gpioctrl.WaitForEventAsync(gpio_num, System.Device.Gpio.PinEventTypes.Falling | System.Device.Gpio.PinEventTypes.Rising, cts_last.Token);
+        //        //}
+        //        //catch (Exception x)
+        //        //{
+        //        //    if (cts_last.IsCancellationRequested)
+        //        //        break;
+        //        //    BlazorSession.Current.Alert("Error", x.ToString());
+        //        //    btnon.Style("background-color", "#fff");
+        //        //    btnoff.Style("background-color", "#fff");
+        //        //    break;
+        //        //}
+        //    }
+        //}
+
+
         string _flash_next_id = null;
 
         void ButtonClick(bool state_on, bool flashmode)
         {
             if (!SetGpioState(state_on))
                 return;
-            if (state_on)
-            {
-                btnon.Style("background-color", "green");
-                btnoff.Style("background-color", "#ccc");
-            }
-            else
-            {
-                btnoff.Style("background-color", "green");
-                btnon.Style("background-color", "#ccc");
-            }
+
+            SetStateColor(state_on, "green");
 
             _flash_next_id = null;
             if (!flashmode)
@@ -246,16 +379,48 @@ else
 
         btnoff.OnClick((sender, args) =>
         {
-            ButtonClick(false, args.JSEvent.ctrlKey);
+            if (args.JSEvent.altKey)
+                CaptureGpio();
+            else
+                ButtonClick(false, args.JSEvent.ctrlKey);
         });
         btnon.OnClick((sender, args) =>
         {
-            ButtonClick(true, args.JSEvent.ctrlKey);
+            if (args.JSEvent.altKey)
+                CaptureGpio();
+            else
+                ButtonClick(true, args.JSEvent.ctrlKey);
+        });
+        btnoff.OnDoubleClick(delegate
+        {
+            ButtonClick(false, true);
+        });
+        btnon.OnDoubleClick(delegate
+        {
+            ButtonClick(true, true);
+        });
+
+        captureallitems.Add(delegate
+        {
+            CaptureGpio();
         });
     }
+
 }
 
 @code{
+
+    void CaptureAll()
+    {
+        BlazorSession.Current.ConsoleLog("start " + captureallitems.Count);
+        foreach (Action item in captureallitems)
+            item();
+        BlazorSession.Current.ConsoleLog("end " + captureallitems.Count);
+    }
+
+    List<Action>
+    captureallitems = new List<Action>
+        ();
 
     class PinInfo
     {
@@ -270,7 +435,9 @@ else
     {
         if (___pins != null)
             return ___pins;
-        List<PinInfo> list = new List<PinInfo>();
+        List<PinInfo>
+            list = new List<PinInfo>
+                ();
         void AddPin(int index, string color, string name, string alt)
         {
             list.Add(new PinInfo { Index = index, Color = color, Name = name, Alt = alt });
