@@ -6,9 +6,9 @@ Just a tool for :
 
 2 - Manage system as more as possible
 
-# Support Linux/MacOSX/Windows Now.
+## Some of the features support MacOSX/Windows Now.
 
-# Progresss v0.0.8 - Raspbarry Pi GPIO Capture
+# Progresss v0.0.9 - CPU Monitor
 
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin.png)
 
@@ -17,6 +17,10 @@ Just a tool for :
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin-ProcList.png)
 
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin-GPIO.png)
+
+![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin-CPUMonitor.png)
+
+Progresss v0.0.8 - Raspbarry Pi GPIO Capture
 
 Progresss v0.0.7 - Support Windows Login
 

@@ -102,7 +102,7 @@
         if (info.Length == 0)
         {
             string text = System.IO.File.ReadAllText(filepath, System.Text.Encoding.UTF8);
-            if(string.IsNullOrEmpty(text))
+            if (string.IsNullOrEmpty(text))
             {
                 previewpanel.Create("div").InnerText("<empty/>");
                 return;
@@ -115,9 +115,19 @@
 
         if (info.Length < 32768)
         {
-            byte[] filedata = System.IO.File.ReadAllBytes(filepath);
-            string str = new System.IO.StreamReader(new System.IO.MemoryStream(filedata), System.Text.Encoding.UTF8, true).ReadToEnd();
-            if (str.Where(c => IsValidChar(c)).Count() > filedata.Length * 3 / 4)
+            byte[] filedata = null;
+            string str;
+            try
+            {
+                filedata = System.IO.File.ReadAllBytes(filepath);
+                str = new System.IO.StreamReader(new System.IO.MemoryStream(filedata), System.Text.Encoding.UTF8, true).ReadToEnd();
+            }
+            catch
+            {
+                str = System.IO.File.ReadAllText(filepath, System.Text.Encoding.UTF8);
+            }
+
+            if (filedata == null || str.Where(c => IsValidChar(c)).Count() > str.Length * 3 / 4)
             {
                 previewpanel.Create("div style='white-space:pre-wrap;word-break:break-word;'").InnerText(str);
             }

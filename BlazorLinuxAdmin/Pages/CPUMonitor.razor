@@ -1,0 +1,310 @@
+﻿@page "/CPUMonitor"
+
+<h1>CPUMonitor</h1>
+
+@if (info == null)
+{
+    if (Environment.OSVersion.Platform == PlatformID.Unix)
+    {
+        info = new UnixCPUInfo();
+    }
+    else
+    {
+        //<div>Only for Unix currently.</div>
+        //return;
+
+        info = new DebugCPUInfo();
+
+    }
+}
+
+@if (info is DebugCPUInfo)
+{
+    <div>In windows , the code show testing data only.</div>
+}
+
+<div> CPU Name : @info.GetCPUName() , Temperature : @Math.Floor(info.GetCPUTemp())</div>
+
+<BlazorDomTree OnRootReady="bdt_ready" />
+
+@code {
+
+    CPUInfo info;
+
+    class CPUState
+    {
+        public int Idle;
+        public int User;
+        public int System;
+    }
+    abstract class CPUInfo
+    {
+        string _cpuname;
+        public string GetCPUName()
+        {
+            if (_cpuname == null)
+                _cpuname = GetCPUNameImpl();
+            return _cpuname;
+        }
+        protected abstract string GetCPUNameImpl();
+        public abstract double GetCPUTemp();
+        public abstract CPUState[] GetCPUStates();
+    }
+    class DebugCPUInfo : CPUInfo
+    {
+        protected override string GetCPUNameImpl()
+        {
+            return "Debug";
+        }
+        Random r = new Random();
+        public override double GetCPUTemp()
+        {
+            return 40 + Math.Sin(DateTime.Now.TimeOfDay.TotalSeconds / 5) * 10 + r.NextDouble() * 2;
+        }
+
+        CPUState _prevstate;
+        DateTime _prevtime;
+        public override CPUState[] GetCPUStates()
+        {
+            if (_prevstate == null || DateTime.Now - _prevtime > TimeSpan.FromMilliseconds(900))
+            {
+                CPUState newstate = new CPUState();
+                if (_prevstate != null)
+                {
+                    newstate.Idle = _prevstate.Idle;
+                    newstate.User = _prevstate.User;
+                    newstate.System = _prevstate.System;
+                }
+                double adduser = 20 + Math.Sin(DateTime.Now.TimeOfDay.TotalSeconds / 5) * 20 + r.NextDouble() * 2;
+                double addsystem = 15 + Math.Sin(DateTime.Now.TimeOfDay.TotalSeconds / 4) * 15 + r.NextDouble() * 12;
+                newstate.User += (int)adduser;
+                newstate.System += (int)addsystem;
+                newstate.Idle += 100 - (int)adduser - (int)addsystem;
+                _prevstate = newstate;
+                _prevtime = DateTime.Now;
+            }
+            return new CPUState[] { _prevstate };
+        }
+    }
+    class UnixCPUInfo : CPUInfo
+    {
+        protected override string GetCPUNameImpl()
+        {
+            foreach (string line in System.IO.File.ReadAllLines("/proc/cpuinfo"))
+            {
+                string[] pair = line.Split(':');
+                if (pair[0].Trim() == "Hardware")
+                    return pair[1].Trim();
+            }
+            return "(unknown)";
+        }
+        public override double GetCPUTemp()
+        {
+            return double.Parse(System.IO.File.ReadAllText("/sys/class/thermal/thermal_zone0/temp").Trim()) / 1000;
+        }
+        public override CPUState[] GetCPUStates()
+        {
+            string alltext = System.IO.File.ReadAllText("/proc/stat");
+            List<CPUState> states = new List<CPUState>();
+            foreach (string eachline in alltext.Split('\n'))
+            {
+                string[] arr = eachline.Split(' ', '\t');
+                string name = arr[0].Trim();
+                if (name.Length < 4 || !name.StartsWith("cpu"))
+                    continue;
+                CPUState state = new CPUState();
+                states.Add(state);
+                state.Idle = int.Parse(arr[4]);
+                state.User = int.Parse(arr[1]);
+                state.System = int.Parse(arr[3]);
+            }
+            return states.ToArray();
+        }
+    }
+
+    void bdt_ready(BlazorDomTree bdt)
+    {
+        bool isdisposed = false;
+        bdt.Disposed += delegate
+        {
+            isdisposed = true;
+        };
+
+        int priod = 500;
+        int maxcount = 120;
+        double width = 360;
+        var tempcanvas = bdt.Root.Create<PlusCanvas>("width=" + width + " height=200 style='background-color:#eee'");
+
+        bdt.Root.Create("br");
+        PlusControl btm = bdt.Root.Create("div");
+        PlusControl label = btm.Create("label");
+        PlusControl checkbox = label.Create("input type='checkbox'");
+        checkbox.Attribute_Checked(true);
+        label.Create("span").InnerText("Alert when temperature > than");
+        int alertvalue = 50;
+        PlusControl inptemp = btm.Create("input type=number style='width:60px'").Value(alertvalue.ToString());
+        inptemp.OnChange(delegate
+        {
+            int dv;
+            if (int.TryParse(inptemp.Value, out dv))
+                alertvalue = dv;
+            else
+                BlazorSession.Current.Alert("Error", "InvalidValue", () => inptemp.SetFocus());
+        });
+
+
+        PlusControl audio = new PlusControl("audio");
+        string dataurl = "data:audio/mpeg;base64,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";
+
+        audio.SetAttribute("src", dataurl);
+
+        void DoAlert()
+        {
+            BlazorSession.Current.Toast("Warning " + info.GetCPUTemp(), 1000, "cputemp");
+            audio.Eval("this.play();");
+        }
+
+        btm.Create("button").InnerText("Play now").OnClick(delegate
+        {
+            DoAlert();
+        });
+
+
+        bdt.Root.Create("hr");
+
+        var loadcanvas = bdt.Root.Create<PlusCanvas>("width=" + width + " height=200 style='background-color:#eee'");
+
+        bdt.Root.Create("br");
+
+        string cpuloaduid = Guid.NewGuid().ToString();
+
+        bdt.Root.Create("button").InnerText("Add Cpu Load").OnClick(delegate
+        {
+            string uid = cpuloaduid;
+            var t = new System.Threading.Thread(() =>
+            {
+                while (uid == cpuloaduid&&!isdisposed)
+                    ;
+            });
+            t.Start();
+        });
+        bdt.Root.Create("button").InnerText("Clear Cpu Load").OnClick(delegate
+        {
+            cpuloaduid = Guid.NewGuid().ToString();
+        });
+
+
+
+        Queue<double> temps = new Queue<double>();
+
+        Queue<CPUState[]> states = new Queue<CPUState[]>();
+
+        void RefreshData()
+        {
+            if (isdisposed) return;
+
+            BlazorSession.Current.SetTimeout(priod, RefreshData);
+
+            StateHasChanged();
+
+            var newt = info.GetCPUTemp();
+            BlazorSession.Current.ConsoleLog(newt);
+            temps.Enqueue(newt);
+
+            var laststate = info.GetCPUStates();
+            states.Enqueue(laststate);
+
+            if (newt > alertvalue && checkbox.Attribute_Checked)
+                DoAlert();
+
+            if (temps.Count > maxcount)
+                temps.Dequeue();
+
+            if (states.Count > maxcount)
+                states.Dequeue();
+
+            tempcanvas.ClearRect(0, 0, width, 200);
+            tempcanvas.Font("12px Arial");
+            tempcanvas.LineWidth(1);
+            tempcanvas.StrokeText("70", 2, 12);
+            tempcanvas.StrokeText("20", 2, 195);
+
+            int index = 0;
+            foreach (double tv in temps)
+            {
+                double x = width + (index - temps.Count) * width / maxcount;
+                double y = 200 - (tv-20)*2 * 2;
+
+                if (index == 0)
+                {
+                    tempcanvas.BeginPath();
+                    tempcanvas.StrokeStyle("red");
+                    tempcanvas.LineWidth(2);
+                    tempcanvas.MoveTo(x, y);
+                }
+                else
+                {
+                    tempcanvas.LineTo(x, y);
+                }
+                tempcanvas.Stroke();
+                index++;
+            }
+
+            tempcanvas.Flush();
+
+
+            loadcanvas.ClearRect(0, 0, width, 200);
+
+
+            index = 0;
+            CPUState[] prevarr = null;
+            var lastused = 0;
+            foreach (CPUState[] statearr in states)
+            {
+                if (prevarr == null)
+                {
+                    prevarr = statearr;
+                    continue;
+                }
+
+                int idle = statearr.Sum(v => v.Idle) - prevarr.Sum(v => v.Idle);
+                int used = statearr.Sum(v => v.User + v.System) - prevarr.Sum(v => v.User + v.System);
+
+                if (used + idle != 0)
+                {
+                    used = 100 * used / (used + idle);
+                    lastused = used;
+                }
+                else
+                {
+                    used = lastused;
+                }
+
+                double x = width + (index - temps.Count) * width / maxcount;
+                double y = 200 - used * 2;
+
+                if (index == 0)
+                {
+                    loadcanvas.BeginPath();
+                    loadcanvas.StrokeStyle("red");
+                    loadcanvas.LineWidth(2);
+                    loadcanvas.MoveTo(x, y);
+                }
+                else
+                {
+                    loadcanvas.LineTo(x, y);
+                }
+                loadcanvas.Stroke();
+
+                prevarr = statearr;
+                index++;
+
+            }
+
+            loadcanvas.Flush();
+        }
+
+        RefreshData();
+
+    }
+}
