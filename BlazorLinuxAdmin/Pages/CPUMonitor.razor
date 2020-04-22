@@ -23,13 +23,15 @@
     <div>In windows , the code show testing data only.</div>
 }
 
-<div> CPU Name : @info.GetCPUName() , Temperature : @Math.Floor(info.GetCPUTemp())</div>
+<div> CPU Name : @info.GetCPUName() , Temperature : @Math.Floor(info.GetCPUTemp())°C , Load : @lastused% Frequence : @info.GetCPUFreq()</div>
 
 <BlazorDomTree OnRootReady="bdt_ready" />
 
 @code {
 
     CPUInfo info;
+
+    int lastused = 0;
 
     class CPUState
     {
@@ -49,6 +51,7 @@
         protected abstract string GetCPUNameImpl();
         public abstract double GetCPUTemp();
         public abstract CPUState[] GetCPUStates();
+        public virtual int GetCPUFreq() { return -1; }
     }
     class DebugCPUInfo : CPUInfo
     {
@@ -120,6 +123,18 @@
             }
             return states.ToArray();
         }
+        public override int GetCPUFreq()
+        {
+            List<int> list = new List<int>();
+            for (int i = 0; true; i++)
+            {
+                string path = "/sys/devices/system/cpu/cpu"+i+"/cpufreq/cpuinfo_cur_freq";
+                if (!System.IO.File.Exists(path))
+                    break;
+                list.Add(int.Parse(System.IO.File.ReadAllText(path).Trim()) / 1000);
+            }
+            return (int)list.Average();
+        }
     }
 
     void bdt_ready(BlazorDomTree bdt)
@@ -183,7 +198,7 @@
             string uid = cpuloaduid;
             var t = new System.Threading.Thread(() =>
             {
-                while (uid == cpuloaduid&&!isdisposed)
+                while (uid == cpuloaduid && !isdisposed)
                     ;
             });
             t.Start();
@@ -192,7 +207,29 @@
         {
             cpuloaduid = Guid.NewGuid().ToString();
         });
-
+        bdt.Root.Create("button").InnerText("Test Single Core").OnClick(delegate
+        {
+            cpuloaduid = Guid.NewGuid().ToString();
+            var bs = BlazorSession.Current;
+            var t = new System.Threading.Thread(() =>
+            {
+                var watch = new System.Diagnostics.Stopwatch();
+                int fib(int n)
+                {
+                    if (n < 3)
+                        return 1;
+                    return fib(n - 1) + fib(n - 2);
+                }
+                watch.Start();
+                fib(40);
+                watch.Stop();
+                bs.InvokeInRenderThread(delegate
+                {
+                    bs.Alert("Result", Convert.ToString(Math.Floor(2000 / watch.Elapsed.TotalSeconds)));
+                });
+            });
+            t.Start();
+        });
 
 
         Queue<double> temps = new Queue<double>();
@@ -233,7 +270,7 @@
             foreach (double tv in temps)
             {
                 double x = width + (index - temps.Count) * width / maxcount;
-                double y = 200 - (tv-20)*2 * 2;
+                double y = 200 - (tv - 20) * 2 * 2;
 
                 if (index == 0)
                 {
@@ -258,7 +295,6 @@
 
             index = 0;
             CPUState[] prevarr = null;
-            var lastused = 0;
             foreach (CPUState[] statearr in states)
             {
                 if (prevarr == null)

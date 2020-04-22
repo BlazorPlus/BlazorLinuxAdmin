@@ -167,8 +167,6 @@
                     if (subtd.GetChildCount() == 0)
                         CreateComponentTree(subtd, subfolder);/*Recursive*/
 
-                    ShowFileList(subfolder);
-
                     icon.CssClass("oi oi-minus");
                     tr1.SetStyle("display", "");
                 }
@@ -183,6 +181,8 @@
 
             new PlusControl[] { icon, spantext }.OnClick(delegate
             {
+                ShowFileList(subfolder);
+
                 Toggle();
             });
 
