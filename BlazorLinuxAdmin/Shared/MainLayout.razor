@@ -153,12 +153,13 @@
             if (!isok)
             {
                 BlazorSession.Current.Alert("Error", "Invalid Credentials");
+                return;
             }
-            else
-            {
-                BlazorSession.Current.Browser.SetMemoryItem("LogonOK", "OK");
-                viewmode = null;
-            }
+
+
+
+            BlazorSession.Current.Browser.SetMemoryItem("LogonOK", "OK");
+            viewmode = null;
         }
     }
 
@@ -214,16 +215,125 @@
     }
 }
 
+
+
+
+@code{
+    bool keepStateWhenSwitchPages = true;
+}
+
+
+
+
+@inject NavigationManager navmgr
+
+@code{
+
+    TimeSpan GetUrlMaxLifeSpan(string url)
+    {
+        if (url.Contains("/fetchdata")) // Let /fetachdata always refresh
+            return TimeSpan.Zero;
+
+        if (url.Contains("/counter"))   // Let /counter expires in 10 seconds
+            return TimeSpan.FromSeconds(10);
+
+        return TimeSpan.FromSeconds(-1);    //other pages never expires
+    }
+
+    class PageItem
+    {
+        public string Url;
+        public RenderFragment PageBody;
+        public DateTime StartTime = DateTime.Now;
+        public DateTime ActiveTime = DateTime.Now;
+        public TimeSpan MaxLifeSpan;
+    }
+
+    Dictionary<string, PageItem> bodymap = new Dictionary<string, PageItem>();
+
+    int mainRenderCount = 0;
+}
+
 <div class="sidebar">
     <NavMenu />
 </div>
 
 <div class="main">
+
+
+    @{
+
+        bool currurlrendered = false;
+
+        string currenturl = navmgr.Uri;
+
+        if (keepStateWhenSwitchPages)
+        {
+            PageItem curritem;
+            if (bodymap.TryGetValue(currenturl, out curritem))
+            {
+                curritem.ActiveTime = DateTime.Now;
+            }
+            else
+            {
+                curritem = new PageItem { Url = currenturl, PageBody = Body };
+                curritem.MaxLifeSpan = GetUrlMaxLifeSpan(currenturl);
+                if (curritem.MaxLifeSpan != TimeSpan.Zero)
+                {
+                    bodymap[navmgr.Uri] = curritem;
+                }
+            }
+        }
+        else
+        {
+            bodymap.Clear();
+        }
+
+        mainRenderCount++;
+
+    }
+
+    @foreach (PageItem eachitem in bodymap.Values.Where(
+     eachitem => eachitem.Url != currenturl && eachitem.MaxLifeSpan.TotalSeconds > 0 && DateTime.Now - eachitem.ActiveTime > eachitem.MaxLifeSpan))
+    {
+        bodymap.Remove(eachitem.Url);
+    }
+
     <div class="top-row px-4">
-        <a href="https://docs.microsoft.com/aspnet/" target="_blank">About</a>
+        @foreach (PageItem eachitem in bodymap.Values)
+        {
+
+        }
+        <EditForm Model="this">
+            <label style="white-space: nowrap;"><InputCheckbox @bind-Value="keepStateWhenSwitchPages" />keepStateWhenSwitchPages</label>
+        </EditForm>
     </div>
 
-    <div class="content px-4">
-        @Body
-    </div>
+    @foreach (PageItem eachitem in bodymap.Values)
+    {
+        string pageurl = eachitem.Url;
+        RenderFragment pagebody = eachitem.PageBody;
+
+        string divstyle = "display:none";
+        if (pageurl == currenturl)
+        {
+            divstyle = "";
+            currurlrendered = true;
+        }
+
+        <div @key="pageurl" class="content px-4" style="@divstyle">
+            @pagebody
+        </div>
+    }
+
+    @if (!currurlrendered)
+    {
+        <div class="content px-4">
+            @Body
+        </div>
+    }
+
 </div>
+
+
+
