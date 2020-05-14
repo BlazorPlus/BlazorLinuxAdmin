@@ -182,10 +182,13 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 		public bool AllowConnector { get; set; }
 
+		public TcpMapLicense ConnectorLicense { get; set; }
+
 		public TcpMapServer Clone()
 		{
 			var newinst = (TcpMapServer)this.MemberwiseClone();
 			newinst.License = License.Clone();
+			newinst.ConnectorLicense = ConnectorLicense?.Clone();
 			return newinst;
 		}
 	}
@@ -197,6 +200,8 @@ namespace BlazorLinuxAdmin.TcpMaps
 	[Serializable]
 	public class TcpMapConnector
 	{
+		public TcpMapLicense License { get; set; }
+
 		public string Id { get; set; }
 
 		public string Comment { get; set; }
@@ -318,7 +323,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 		{
 			CommandMessage msg = new CommandMessage();
 
-			BinaryReader br = new BinaryReader(ms);
+			BinaryReader br = new BinaryReader(ms); //TODO:performance dont use BinaryWriter/BinaryReader
 			string flag = br.ReadString();
 			if (flag[0] == '1')
 				msg.Name = br.ReadString();
@@ -351,10 +356,15 @@ namespace BlazorLinuxAdmin.TcpMaps
 			return msg;
 		}
 
-		public byte[] Pack()
+		public byte[] Pack()    //TODO:performance return Memory<byte>
 		{
-			MemoryStream ms = new MemoryStream();
-			BinaryWriter br = new BinaryWriter(ms);
+			int capacity = 64;
+			if (Name != null) capacity += Name.Length * 2;
+			if (!Data.IsEmpty) capacity += Data.Length;
+			if (Args != null) capacity += Args.Length * 8 + Args.Sum(v => v?.Length * 2 ?? 0);
+
+			MemoryStream ms = new MemoryStream(capacity);//TODO:performance dont use MemoryStream
+			BinaryWriter br = new BinaryWriter(ms); //TODO:performance dont use BinaryWriter/BinaryReader
 			byte[] h8 = System.Text.Encoding.ASCII.GetBytes(STR_H8);
 			br.Write(h8);
 			br.Write(0);//place holder
@@ -381,6 +391,10 @@ namespace BlazorLinuxAdmin.TcpMaps
 				throw new Exception("reach MAX_PACKAGE_SIZE:" + data.Length);
 			byte[] bsiv = BitConverter.GetBytes((uint)data.Length);
 			Buffer.BlockCopy(bsiv, 0, data, 8, 4);
+
+			if(data.Length>capacity)
+				Console.WriteLine("capacity :" + data.Length + "/" + capacity);
+
 			return data;
 		}
 

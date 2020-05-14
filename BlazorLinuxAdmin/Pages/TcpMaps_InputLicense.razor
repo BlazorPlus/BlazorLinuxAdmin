@@ -1,0 +1,161 @@
+﻿
+@using BlazorLinuxAdmin.TcpMaps
+
+@inject BlazorSession bses
+
+
+@if (Value == null)
+{
+	<span style="color:red;">No License</span>
+}
+else
+{
+	<span>@Value.Key</span>
+}
+
+
+<button style="display:inline-block;position:relative;" onclick="this.querySelector('input').click()">
+	<span>Upload</span>
+	<BlazorUploader @ref="uploader2" style="position:absolute;left:0px;top:0px;width:100%;height:100%;opacity:0" />
+</button>
+
+
+<button @onclick="CreateNewLicenseAsync">Create New </button>
+
+
+@if (Value != null)
+{
+	<button @onclick="()=>ExportLicense(Value)">Export</button>
+}
+
+
+@code {
+
+	async Task CreateNewLicenseAsync()
+	{
+		TcpMapLicense lic = TcpMapLicense.CreateNew("lic_" + DateTime.Now.Ticks, "Lic-" + Guid.NewGuid().ToString().Substring(0, 8));
+		Value = lic;
+		await ValueChanged.InvokeAsync(Value);
+	}
+
+	BlazorUploader __uploader2;
+	BlazorUploader uploader2
+	{
+		get
+		{
+			return __uploader2;
+		}
+		set
+		{
+			__uploader2 = value;
+			if (__uploader2 == null) return;
+			__uploader2.ProcessSingleUploadAsync = async (file) =>
+			{
+				try
+				{
+					var ms = new System.IO.MemoryStream();
+					await UploadHandler_Toast(file, ms);
+					ms.Seek(0, System.IO.SeekOrigin.Begin);
+					string json = new System.IO.StreamReader(ms).ReadToEnd();
+					var lic = System.Text.Json.JsonSerializer.Deserialize<TcpMapLicense>(json);
+					Value = lic;
+					StateHasChanged();
+					await ValueChanged.InvokeAsync(lic);
+					StateHasChanged();
+				}
+				catch (Exception x)
+				{
+					bses.Alert("Error", x.ToString());
+				}
+			}; ;
+		}
+	}
+
+
+	static string UPLOAD_TOAST_KEY = "upload_toast";
+
+	async Task UploadHandler_Toast(BlazorUploaderFile file, System.IO.Stream targetstream)
+	{
+
+
+		long readok = 0;
+		byte[] buffer = new byte[1024 * 16];
+		while (true)
+		{
+			double p = Math.Floor(100 * (double)readok / (double)file.FileSize);
+			bses.Toast(file.FileName + " " + p + "% (" + readok / 1024 + "KB/" + file.FileSize / 1024 + "KB)", 5000, UPLOAD_TOAST_KEY);
+			int rc = await file.Stream.ReadAsync(buffer, 0, buffer.Length);
+			if (rc == 0)
+				break;
+			readok += rc;
+			if (readok > file.FileSize)
+				throw new Exception("Invalid stream size");
+
+			if (targetstream != null)
+				await targetstream.WriteAsync(buffer, 0, rc);
+
+			await Task.Delay(100);//control the upload speed
+		}
+		if (readok < file.FileSize)
+			throw new Exception("file upload break");
+
+
+		bses.Toast(file.FileName + " DONE (" + readok / 1024 + "KB) " + file.FileMime, 2000, UPLOAD_TOAST_KEY);
+
+	}
+
+
+
+	[Parameter]
+	public BlazorLinuxAdmin.TcpMaps.TcpMapLicense Value { get; set; }
+
+	[Parameter]
+	public EventCallback<BlazorLinuxAdmin.TcpMaps.TcpMapLicense> ValueChanged { get; set; }
+
+
+
+
+	void ExportLicense(TcpMapLicense license)
+	{
+		void LinkReady(BlazorDomTree bdt)
+		{
+			bdt.Root.InnerText = "TcpMapClient_" + license.Key + ".json";
+
+			string jsontext = System.Text.Json.JsonSerializer.Serialize(license);
+			bdt.Root.Eval(@"
+this.download=arguments[0];
+var str=arguments[1];
+var bin = new Array(str.length);
+for (var i = 0; i < str.length; i++)bin[i] = str.charCodeAt(i);
+var blob = new Blob([new Uint8Array(bin)], { type: 'text/json' })
+var url = URL.createObjectURL(blob);
+this.setAttribute('href',url);
+", "TcpMapClient_" + license.Key + ".json", jsontext);
+		}
+		BlazorDialog dlg = null;
+
+		RenderFragment rf = __builder =>
+		{
+		<div style="width:480px;background-color:white;padding:32px;border-radius:5px;box-shadow:#999 1px 1px 6px">
+			<h5>You are download the license security data.</h5>
+			<p>Upload it to the remote server to activate it.</p>
+			<BlazorDomTree TagName="a" OnRootReady="LinkReady"></BlazorDomTree>
+			<hr />
+			<div style="text-align:center"><button @onclick="dlg.Close">Close</button></div>
+		</div>
+		};
+		Action<BlazorDialog>
+		dlgload = argdlg =>
+		{
+			dlg = argdlg;
+			dlg.CancelHandler = delegate    //ESC or BACK button clicked
+			{
+				dlg.Close();
+			};
+		};
+
+		bses.ShowDialog(rf, dlgload);
+
+	}
+
+}

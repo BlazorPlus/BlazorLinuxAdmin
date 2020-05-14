@@ -1,5 +1,4 @@
 ﻿@page "/demo_show_info"
-@page "/demo_show_info/{index}/show"
 
 @inject Microsoft.AspNetCore.Http.IHttpContextAccessor hca
 
@@ -9,11 +8,18 @@
 
 @inject NavigationManager navmgr
 
-@code{
 
-    [Parameter]
-    public string index { get; set; }
+@{
+    DateTime now = DateTime.Now;
+    if (BlazorSession.Current.Browser == null)
+    {
+        BlazorSession.Current.SetTimeout(100, delegate
+        {
+            StateHasChanged();
+        });
+    }
 }
+
 
 <style>
     fieldset {
@@ -34,7 +40,7 @@
         margin: 8px 0;
     }
 
-    label {
+    fieldset label {
         display: inline-block;
         width: 180px;
         color: navy;
@@ -51,21 +57,6 @@
     </legend>
 
     <div>
-        @if (BlazorSession.Current.Browser != null)
-        {
-            <label>BrowserId : </label>@BlazorSession.Current.Browser.UniqueID
-        }
-        else
-        {
-            <label>BrowserId : </label><span>...Loading...</span>
-            BlazorSession.Current.SetTimeout(100, delegate
-            {
-                StateHasChanged();
-            });
-        }
-    </div>
-
-    <div>
         <label>SessionId : </label>@BlazorSession.Current.SessionId
     </div>
 
@@ -73,7 +64,7 @@
         <label>StartTime : </label>@BlazorSession.Current.StartTime.ToLongTimeString()
     </div>
     <div>
-        <label>Elapsed : </label>@((DateTime.Now - BlazorSession.Current.StartTime).ToString().Split('.')[0])
+        <label>Elapsed : </label>@((now - BlazorSession.Current.StartTime).ToString().Split('.')[0])
     </div>
 
     <div>
@@ -81,6 +72,53 @@
     </div>
     <div>
         <label>Session Disposed : </label>@BlazorSession.InstanceDisposedCount
+    </div>
+</fieldset>
+
+
+<fieldset>
+    <legend>
+        BlazorSession.Current.Browser:
+    </legend>
+
+    <div>
+        <label>BrowserId : </label>@BlazorSession.Current.Browser?.UniqueID
+    </div>
+    <div>
+        <label>Browser-JS-Timezone : </label>@BlazorSession.Current.Browser?.JavaScriptTimezoneOffset
+    </div>
+    @*<div>
+            <label>Browser-Time : </label>@BlazorSession.Current.Browser?.ToBrowserTime(now)
+        </div>*@
+    <div>
+        <label>Browser-Time : </label>@(now- (now - now.ToUniversalTime()) - TimeSpan.FromMinutes(BlazorSession.Current.Browser?.JavaScriptTimezoneOffset??0))
+    </div>
+
+</fieldset>
+
+
+<fieldset>
+    <legend>
+        Server Time :
+    </legend>
+    <div>
+        <label>Server-Time : </label>@(now)
+    </div>
+
+    <div>
+        <label>UTC-Time : </label>@now.ToUniversalTime()
+    </div>
+    <div>
+        <label>TimeZone : </label> @TimeZoneInfo.Local.DisplayName
+    </div>
+    <div>
+        <label>IsDaylightSavingTime : </label>@TimeZoneInfo.Local.IsDaylightSavingTime(DateTime.Now)
+    </div>
+    <div>
+        <label>Server-JS-Timezone :</label>@(-(now - now.ToUniversalTime()).TotalMinutes) (Adjusted if DaylightSaving)
+    </div>
+    <div>
+        <label>Server-JS-Timezone :</label>@(-TimeZoneInfo.Local.BaseUtcOffset.TotalMinutes) (BaseUtcOffset)
     </div>
 </fieldset>
 

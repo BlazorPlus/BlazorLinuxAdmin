@@ -36,6 +36,9 @@ namespace BlazorLinuxAdmin.TcpMaps
 			LogMessage("ServerWorker WorkAsync start");
 			try
 			{
+				if (this.Connector.License == null)
+					throw new Exception("Miss License Key");
+
 				int againTimeout = 500;
 			StartAgain:
 				_listener = new TcpListener(IPAddress.Any, Connector.LocalPort);
@@ -116,16 +119,52 @@ namespace BlazorLinuxAdmin.TcpMaps
 			serverSocket.InitTcp();
 			await serverSocket.ConnectAsync(Connector.ServerHost, 6022);
 
-			CommandMessage connmsg = new CommandMessage("ConnectorConnect", Connector.ServerPort.ToString(),"USB");
+			bool supportEncrypt = false;
+			byte[] clientKeyIV;
+
+			CommandMessage connmsg = new CommandMessage();
+			connmsg.Name = "ConnectorConnect";
+			List<string> arglist = new List<string>();
+			arglist.Add(this.Connector.License.Key);
+			arglist.Add(this.Connector.ServerPort.ToString());
+			byte[] encryptedKeyIV, sourceHash;
+			Connector.License.GenerateSecureKeyAndHash(out clientKeyIV, out encryptedKeyIV, out sourceHash);
+			arglist.Add(Convert.ToBase64String(encryptedKeyIV));
+			arglist.Add(Convert.ToBase64String(sourceHash));
+			arglist.Add(supportEncrypt ? "1" : "0");
+			arglist.Add("USB");
+			connmsg.Args = arglist.ToArray();
+
 			await serverSocket.SendAsync(connmsg.Pack(), SocketFlags.None);
 
 			connmsg = await CommandMessage.ReadFromSocketAsync(serverSocket);
 
+			if(connmsg==null)
+			{
+				LogMessage("Warning:ConnectorWorker : remote closed connection.");
+				return;
+			}
+
 			LogMessage("Warning:connmsg : " + connmsg);
 
+			if (connmsg.Name != "ConnectOK")
+			{
+				return;
+			}
+
+
+			Stream _sread, _swrite;
+			if (supportEncrypt)
+			{
+				Connector.License.OverrideStream(serverSocket.CreateStream(), clientKeyIV, out _sread, out _swrite);
+			}
+			else
+			{
+				_sread = _swrite = serverSocket.CreateStream();
+			}
+
 			TcpMapConnectorSession session = new TcpMapConnectorSession(new SimpleSocketStream(tcpSocket));
-			Stream clientStream = new SimpleSocketStream(serverSocket);
-			await session.DirectWorkAsync(clientStream);
+			await session.DirectWorkAsync(_sread, _swrite);
 
 		}
 

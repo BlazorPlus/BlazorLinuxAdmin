@@ -57,10 +57,10 @@ namespace BlazorLinuxAdmin.TcpMaps
 		}
 
 
-		public async Task DirectWorkAsync(Stream srw)
+		public async Task DirectWorkAsync(Stream sread,Stream swrite)
 		{
-			_sread = srw;
-			_swrite = srw;
+			_sread = sread;
+			_swrite = swrite;
 			await WorkAsync();
 		}
 	}

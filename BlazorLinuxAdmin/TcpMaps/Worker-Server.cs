@@ -292,7 +292,40 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 		internal async Task AcceptConnectorAndWorkAsync(Socket clientSock, CommandMessage connmsg)
 		{
-			string mode = connmsg.Args[1];
+			bool supportEncrypt = false;
+			byte[] clientKeyIV;
+			try
+			{
+				this.Server.ConnectorLicense.DescriptSourceKey(Convert.FromBase64String(connmsg.Args[2]), Convert.FromBase64String(connmsg.Args[3]), out clientKeyIV);
+			}
+			catch (Exception x)
+			{
+				OnError(x);
+				var failedmsg = new CommandMessage("ConnectFailed", "InvalidSecureKey");
+				await clientSock.SendAsync(failedmsg.Pack(), SocketFlags.None);
+				return;
+			}
+
+			if (connmsg.Args[4] == "0")
+			{
+				supportEncrypt = false;
+			}
+
+
+			var resmsg = new CommandMessage("ConnectOK", "OK", "Connected");
+			await clientSock.SendAsync(resmsg.Pack(), SocketFlags.None);
+
+			Stream _sread, _swrite;
+			if (supportEncrypt)
+			{
+				Server.ConnectorLicense.OverrideStream(clientSock.CreateStream(), clientKeyIV, out _sread, out _swrite);
+			}
+			else
+			{
+				_sread = _swrite = clientSock.CreateStream();
+			}
+
+			string mode = connmsg.Args[5];
 			if (mode == "USB")//use server bandwidth
 			{
 				Socket localsock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
@@ -302,8 +335,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 				await localsock.ConnectAsync(ip, Server.ServerPort);
 
 				TcpMapConnectorSession session = new TcpMapConnectorSession(new SimpleSocketStream(localsock));
-				Stream clientStream = new SimpleSocketStream(clientSock);
-				await session.DirectWorkAsync(clientStream);
+				await session.DirectWorkAsync(_sread, _swrite);
 			}
 			else
 			{

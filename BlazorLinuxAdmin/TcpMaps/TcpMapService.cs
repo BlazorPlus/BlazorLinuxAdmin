@@ -178,9 +178,9 @@ namespace BlazorLinuxAdmin.TcpMaps
 						await TcpMapServerClient.AcceptConnectAndWorkAsync(socket, msg);
 						return;
 					case "ConnectorConnect":
-						var server = FindServerWorkerByPort(int.Parse(msg.Args[0]));
+						var server = FindServerWorkerByPort(int.Parse(msg.Args[1]));
 						string failedmsg = null;
-						if(server==null)
+						if (server == null)
 						{
 							failedmsg = "NoPort";
 						}
@@ -192,15 +192,21 @@ namespace BlazorLinuxAdmin.TcpMaps
 						{
 							failedmsg = "NotAllow";
 						}
+						else if (server.Server.ConnectorLicense == null)
+						{
+							failedmsg = "NotLicense";
+						}
+						else if (server.Server.ConnectorLicense.Key != msg.Args[0])
+						{
+							failedmsg = "LicenseNotMatch";
+						}
 						if (failedmsg != null)
 						{
-							var resmsg = new CommandMessage("ConnectorConnectResult", "Failed", failedmsg);
+							var resmsg = new CommandMessage("ConnectFailed", failedmsg);
 							await socket.SendAsync(resmsg.Pack(), SocketFlags.None);
 						}
 						else
 						{
-							var resmsg = new CommandMessage("ConnectorConnectResult", "OK", "Connected");
-							await socket.SendAsync(resmsg.Pack(), SocketFlags.None);
 							await server.AcceptConnectorAndWorkAsync(socket, msg);
 						}
 						break;
@@ -305,12 +311,24 @@ namespace BlazorLinuxAdmin.TcpMaps
 			AddStartClient(client);
 		}
 
+		static void CheckPortAvailable(int port)
+		{
+			{
+				var existWorker = FindServerWorkerByPort(port);
+				if (existWorker != null)
+					throw new Exception("port is being used by server worker " + existWorker.Server.Id);
+			}
+			{
+				var existWorker = FindConnectorWorkerByPort(port);
+				if (existWorker != null)
+					throw new Exception("port is being used by connector worker " + existWorker.Connector.Id);
+			}
+		}
 
 		static public TcpMapServerWorker CreateServerWorker(TcpMapLicense lic, int port)
 		{
-			var existWorker = FindServerWorkerByPort(port);
-			if (existWorker != null)
-				throw new Exception("port is being used by another worker " + existWorker.Server.Id);
+			CheckPortAvailable(port);
+
 			TcpMapServer server = new TcpMapServer();
 			server.Id = DateTime.Now.ToString("yyyyMMddHHmmssfff");
 			server.License = lic;
@@ -341,9 +359,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 		static public TcpMapConnectorWorker CreateConnectorWorker(int port)
 		{
-			var existWorker = FindConnectorWorkerByPort(port);
-			if (existWorker != null)
-				throw new Exception("port is being used by another worker " + existWorker.Connector.Id);
+			CheckPortAvailable(port);
 
 			TcpMapConnector conn = new TcpMapConnector();
 			conn.Id = DateTime.Now.ToString("yyyyMMddHHmmssfff");
