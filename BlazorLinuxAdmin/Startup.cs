@@ -32,6 +32,8 @@ namespace BlazorLinuxAdmin
 
             services.AddHttpContextAccessor();
             services.AddScoped<BlazorPlus.BlazorSession, WebCustomizeSession>();
+
+            services.AddTcpMaps();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -48,13 +50,15 @@ namespace BlazorLinuxAdmin
                 app.UseHsts();
             }
 
-            app.UseHttpsRedirection();
+            //app.UseHttpsRedirection();
             app.UseStaticFiles();
 
             app.UseRouting();
 
             app.UseEndpoints(endpoints =>
             {
+                //endpoints.MapTcpMaps();
+
                 endpoints.Map("/_blazorplus_handler", BlazorPlus.BlazorSession.ProcessRequestAsync);
 
                 endpoints.MapBlazorHub();

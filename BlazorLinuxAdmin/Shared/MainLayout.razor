@@ -3,7 +3,7 @@
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment whe
 
 @code{
-    bool AllowEnterDirectlyInDevMode = false;
+    bool AllowEnterDirectlyInDevMode = true;   //Warning:don't turn on it at server
 }
 
 @if (BlazorSession.Current.Browser == null)

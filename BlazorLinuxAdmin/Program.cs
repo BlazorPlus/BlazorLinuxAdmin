@@ -23,7 +23,7 @@ namespace BlazorLinuxAdmin
             CreateHostBuilder(args).Build().Run();
         }
 
-        static bool IsKestrelMode()
+        static public bool IsKestrelMode()
         {
             if (pname == "w3wp" || pname == "iisexpress")//IIS or IIS Express
                 return false;
@@ -42,15 +42,16 @@ namespace BlazorLinuxAdmin
                 {
                     if (IsKestrelMode())
                     {
-                        webBuilder.UseKestrel((wbc, kso) =>
-                        {
-                            //wbc.ListenAnyIP(6001);
-                            kso.ListenAnyIP(6011);
-                            //kso.ListenAnyIP(6012,lo=>
-                            //{
-                            //    lo.UseHttps();
-                            //});
-                        });
+                        webBuilder.UseUrls("http://*:6011");
+                        //webBuilder.UseKestrel((wbc, kso) =>
+                        //{
+                        //    //wbc.ListenAnyIP(6001);
+                        //    kso.ListenAnyIP(6011);
+                        //    //kso.ListenAnyIP(6012,lo=>
+                        //    //{
+                        //    //    lo.UseHttps();
+                        //    //});
+                        //});
                         // webBuilder.UseUrls("http://*:6011", "https://*:6012");
                     }
                     webBuilder.UseStartup<Startup>();

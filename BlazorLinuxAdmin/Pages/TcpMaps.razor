@@ -1,0 +1,835 @@
+﻿@page "/tcpmaps"
+
+@using BlazorLinuxAdmin.TcpMaps
+
+@implements IDisposable
+@inject BlazorSession bses
+
+@code{
+
+	bool _disposed = false;
+	void IDisposable.Dispose()
+	{
+		TcpMapService.ErrorOccurred -= ProcessError;
+		TcpMapService.MessageLogged -= ProcessMessage;
+	}
+	void ProcessError(Exception err)
+	{
+		bses.PostToRenderThread(delegate
+		{
+			bses.ConsoleError(err.ToString());
+		});
+	}
+	void ProcessMessage(string msg)
+	{
+		bses.PostToRenderThread(delegate
+		{
+			if (msg.Contains("error", StringComparison.OrdinalIgnoreCase))
+				bses.ConsoleError(msg);
+			else if (msg.Contains("warn", StringComparison.OrdinalIgnoreCase))
+				bses.ConsoleWarn(msg);
+			else
+				bses.ConsoleLog(msg);
+		});
+	}
+	bool _errattached;
+
+	void Refresh()
+	{
+		if (_disposed) return;
+		bses.SetTimeout(1000, Refresh);
+		StateHasChanged();
+	}
+}
+
+@{
+	if (!_errattached)
+	{
+		_errattached = true;
+		TcpMapService.ErrorOccurred += ProcessError;
+		TcpMapService.MessageLogged += ProcessMessage;
+		bses.SetTimeout(1000, Refresh);
+	}
+
+}
+
+<h4>
+	TcpMaps
+	<button @onclick="StateHasChanged">Refresh</button>
+</h4>
+
+@TcpMapService.IsServiceAdded
+@TcpMapService.IsServiceRunning
+@TcpMapService.LogMessages.LastOrDefault();
+
+
+
+<hr />
+
+<style>
+	.mytable, .mytable td, .mytable th {
+		border: solid 1px gray;
+	}
+
+	.tcpmapsfieldset legend {
+		font-size: 16px;
+		font-weight: bold;
+	}
+</style>
+
+<fieldset class="tcpmapsfieldset">
+	<legend>
+		As a Client side
+		<BlazorUploader @ref="clientImportUploader"> Import License </BlazorUploader>
+		<button @onclick="CreateClientLicense"> Create New License </button>
+	</legend>
+
+
+	<table class="mytable">
+		<tr>
+			<td>Id</td>
+			<td>LicKey</td>
+			@*<td>LicName</td>*@
+			<td>Comment</td>
+			<td>ServerHost</td>
+			<td>ServerPort</td>
+			<td>ClientHost</td>
+			<td>ClientPort</td>
+			<td>Status</td>
+			<td>Count</td>
+			<td>Error</td>
+			<td>Message</td>
+			<td></td>
+		</tr>
+		@foreach (var worker in TcpMapService.GetClientWorkers().OrderBy(v => v.Client.Id))
+		{
+			<tr>
+				<td>@worker.Client.Id</td>
+				<td>@worker.Client.License.Key</td>
+				@*<td>@worker.Client.License.Name</td>*@
+				<td>@worker.Client.Comment</td>
+				<td>@worker.Client.ServerHost</td>
+				<td>@worker.Client.ServerPort</td>
+				<td>@worker.Client.ClientHost</td>
+				<td>@worker.Client.ClientPort</td>
+				<td>
+					@if (worker.IsConnected)
+					{
+						<span style="color:blue">Connected</span>
+					}
+					else if (worker.IsStarted)
+					{
+						<span style="color:orange">Connecting..</span>
+					}
+					else if (worker.Client.IsDisabled)
+					{
+						<span style="color:red">Disabled</span>
+					}
+					else
+					{
+						<span style="color:red">Stopped</span>
+					}
+				</td>
+				<td>
+					@worker._presessions.Count
+					/
+					@worker.sessionMap.Count
+				</td>
+				<td>
+					<span title="@worker.Error?.ToString()">
+						@worker.Error?.Message
+					</span>
+				</td>
+				<td @onclick="()=>ShowMessages(worker.LogMessages)">@worker.LogMessages.LastOrDefault()</td>
+				<td>
+					<button @onclick="()=>EditWorker(worker)">Edit</button>
+
+					<button @onclick="()=>ExportLicense(worker.Client.License)">Export Lic</button>
+				</td>
+
+			</tr>
+		}
+	</table>
+
+</fieldset>
+
+<hr />
+
+<fieldset class="tcpmapsfieldset">
+	<legend>
+		As a Server side <BlazorUploader @ref="serverImportUploader"> Import License </BlazorUploader>
+		<button @onclick="CreateServerLicense"> Create New License </button>
+	</legend>
+
+
+	<table class="mytable">
+		<tr>
+			<td>Id</td>
+			<td>LicKey</td>
+			@*<td>LicName</td>*@
+			<td>Comment</td>
+			<td>ServerBind</td>
+			<td>ServerPort</td>
+			<td>Status</td>
+			<td>Count</td>
+			<td>Error</td>
+			<td>Message</td>
+			<td></td>
+		</tr>
+		@foreach (var worker in TcpMapService.GetServerWorkers().OrderBy(v => v.Server.Id))
+		{
+			<tr>
+				<td>@worker.Server.Id</td>
+				<td>@worker.Server.License.Key</td>
+				@*<td>@worker.Server.License.Name</td>*@
+				<td>@worker.Server.Comment</td>
+				<td>@worker.Server.ServerBind</td>
+				<td>@worker.Server.ServerPort</td>
+				<td>
+					@if (worker.IsListened)
+					{
+						<span style="color:blue">IsListened</span>
+					}
+					else if (worker.IsStarted)
+					{
+						<span style="color:orange">Try Listen..</span>
+					}
+					else if (!worker.Server.IsValidated)
+					{
+						<span style="color:orange">NotValidated</span>
+					}
+					else if (worker.Server.IsDisabled)
+					{
+						<span style="color:orange">IsDisabled</span>
+					}
+					else
+					{
+						<span style="color:red">Stopped</span>
+					}
+				</td>
+				<td>
+					@worker._clients.Count/ @worker._presessions.Count , @worker._sessions.Count / @worker.sessionMap.Count
+				</td>
+				<td>
+					<span title="@worker.Error?.ToString()">
+						@worker.Error?.Message
+					</span>
+				</td>
+				<td @onclick="()=>ShowMessages(worker.LogMessages)">@worker.LogMessages.LastOrDefault()</td>
+				<td>
+					<button @onclick="()=>EditWorker(worker)">Edit</button>
+					<button @onclick="()=>ExportLicense(worker.Server.License)">Export Lic</button>
+				</td>
+			</tr>
+		}
+	</table>
+
+
+</fieldset>
+
+
+<hr />
+
+<fieldset class="tcpmapsfieldset">
+	<legend>
+		As a Connector
+		<button @onclick="CreateConnector"> Create New Connector </button>
+	</legend>
+	<table class="mytable">
+		<tr>
+			<td>Id</td>
+			<td>Comment</td>
+			<td>LocalBind</td>
+			<td>LocalPort</td>
+			<td>ServerHost</td>
+			<td>ServerPort</td>
+			<td>SB/PP/UDP</td>
+			<td>Status</td>
+			<td>Error</td>
+			<td>Message</td>
+			<td></td>
+		</tr>
+		@foreach (var worker in TcpMapService.GetConnectorWorkers())
+		{
+			<tr>
+				<td>@worker.Connector.Id</td>
+				<td>@worker.Connector.Comment</td>
+				<td>@worker.Connector.LocalBind</td>
+				<td>@worker.Connector.LocalPort</td>
+				<td>@worker.Connector.ServerHost</td>
+				<td>@worker.Connector.ServerPort</td>
+				<td>@(worker.Connector.UseServerBandwidth?"1":"0"),@(worker.Connector.UseProxyPort?"1":"0"),@(worker.Connector.UseUDP?"1":"0")</td>
+				<td>
+					@if (worker.IsListened)
+					{
+						<span style="color:blue">IsListened</span>
+					}
+					else if (worker.IsStarted)
+					{
+						<span style="color:orange">Try Listen..</span>
+					}
+					else if (worker.Connector.IsDisabled)
+					{
+						<span style="color:orange">IsDisabled</span>
+					}
+					else
+					{
+						<span style="color:red">Stopped</span>
+					}
+				</td>
+				<td>
+					<span title="@worker.Error?.ToString()">
+						@worker.Error?.Message
+					</span>
+				</td>
+				<td @onclick="()=>ShowMessages(worker.LogMessages)">@worker.LogMessages.LastOrDefault()</td>
+				<td>
+					<button @onclick="()=>EditWorker(worker)">Edit</button>
+				</td>
+			</tr>
+		}
+	</table>
+
+</fieldset>
+
+<hr />
+
+@TcpMapService.ServiceError
+
+
+@code {
+
+
+	void CreateConnector() => _ = CreateConnectorAsync();
+	async Task CreateConnectorAsync()
+	{
+		UIDialogOption opt = new UIDialogOption();
+		opt.Title = "Port";
+		opt.Message = "Please type the port";
+		opt.ValueValidator = (obj) =>
+		{
+			string str = Convert.ToString(obj);
+			if (string.IsNullOrWhiteSpace(str))
+				return false;
+			int port;
+			if (!int.TryParse(str, out port))
+				return false;
+			if (port < 1 || port > 65535)
+				return false;
+			if (TcpMapService.FindConnectorWorkerByPort(port) != null)
+				return false;
+			return true;
+		};
+
+		string strport = await bses.PromptAsync(opt);
+		if (string.IsNullOrEmpty(strport))
+			return;
+		var worker = TcpMapService.CreateConnectorWorker(int.Parse(strport.Trim()));
+		bses.Toast("connector created : " + worker.Connector.Id);
+		StateHasChanged();
+	}
+
+
+	void ExportLicense(TcpMapLicense license)
+	{
+		void LinkReady(BlazorDomTree bdt)
+		{
+			bdt.Root.InnerText = "TcpMapClient_" + license.Key + ".json";
+
+			string jsontext = System.Text.Json.JsonSerializer.Serialize(license);
+			bdt.Root.Eval(@"
+this.download=arguments[0];
+var str=arguments[1];
+var bin = new Array(str.length);
+for (var i = 0; i < str.length; i++)bin[i] = str.charCodeAt(i);
+var blob = new Blob([new Uint8Array(bin)], { type: 'text/json' })
+var url = URL.createObjectURL(blob);
+this.setAttribute('href',url);
+", "TcpMapClient_" + license.Key + ".json", jsontext);
+		}
+		BlazorDialog dlg = null;
+
+		RenderFragment rf = __builder =>
+		{
+		<div style="width:480px;background-color:white;padding:32px;border-radius:5px;box-shadow:#999 1px 1px 6px">
+			<h5>You are download the license security data.</h5>
+			<p>Upload it to the remote server to activate it.</p>
+			<BlazorDomTree TagName="a" OnRootReady="LinkReady"></BlazorDomTree>
+			<hr />
+			<div style="text-align:center"><button @onclick="dlg.Close">Close</button></div>
+		</div>
+		};
+		Action<BlazorDialog>
+		dlgload = argdlg =>
+		{
+			dlg = argdlg;
+			dlg.CancelHandler = delegate    //ESC or BACK button clicked
+			{
+				dlg.Close();
+			};
+		};
+
+		bses.ShowDialog(rf, dlgload);
+
+	}
+
+	void EditWorker(TcpMapClientWorker worker)
+	{
+		var client = worker.Client.Clone();
+
+		BlazorDialog dlg = null;
+
+		void Save()
+		{
+			TcpMapService.ReAddClient(client);
+			dlg.Close();
+			StateHasChanged();
+		}
+
+		RenderFragment rf = __builder =>
+		{
+		<div class="mydialog" style="min-width:320px;width:50%;height:50%;background-color:white;padding:32px;border-radius:5px;box-shadow:#999 1px 1px 6px">
+
+			<style>
+				.mydialog form label {
+					display: inline-block;
+					width: 120px;
+					text-align: right;
+					margin: 0 5px;
+				}
+			</style>
+
+			@client.Id - @client.License.Key
+			<hr />
+			<EditForm Model="client">
+				<div>
+					<label>Name</label><InputText @bind-Value="client.License.Name" />
+				</div>
+				<div>
+					<label>Comment</label><InputText @bind-Value="client.Comment" />
+				</div>
+				<div>
+					<label>IsDisabled</label><InputCheckbox @bind-Value="client.IsDisabled" />
+				</div>
+				<div>
+					<label>ServerHost</label><InputText @bind-Value="client.ServerHost" />
+				</div>
+				<div>
+					<label>ServerPort</label><InputNumber @bind-Value="client.ServerPort" />
+				</div>
+				<div>
+					<label>ClientHost</label><InputText @bind-Value="client.ClientHost" />
+				</div>
+				<div>
+					<label>ClientPort</label><InputNumber @bind-Value="client.ClientPort" />
+				</div>
+				<div>
+					<label>Pre-Session</label><InputNumber @bind-Value="client.PreSessionCount" />
+				</div>
+			</EditForm>
+			<hr />
+			<div style="text-align:center">
+				<button @onclick="Save">Save</button>
+			</div>
+		</div>
+		};
+		Action<BlazorDialog>
+			dlgload = argdlg =>
+			{
+				dlg = argdlg;
+				dlg.CancelHandler = delegate    //ESC or BACK button clicked
+				{
+					dlg.Close();
+				};
+			};
+
+		bses.ShowDialog(rf, dlgload);
+	}
+
+
+	void EditWorker(TcpMapServerWorker worker)
+	{
+		var server = worker.Server.Clone();
+
+		BlazorDialog dlg = null;
+
+		async Task Save()
+		{
+			if (!string.IsNullOrWhiteSpace(server.IPServiceUrl))
+			{
+				server.IPServiceUrl = server.IPServiceUrl.Trim();
+				string url = server.IPServiceUrl + "11.22.33.44";
+				bses.Toast("Testing " + url, 5000, "iptest");
+				HttpClient hc = new HttpClient();
+				try
+				{
+					string res = await hc.GetStringAsync(url);
+					if (res.StartsWith("Error:"))
+						throw new Exception(res);
+					bses.Toast(res, 2000, "iptest");
+				}
+				catch (Exception x)
+				{
+					bses.Toast(x.Message, 2000, "iptest");
+					bses.ConsoleError(x.ToString());
+					bses.Alert("Error", x.Message);
+					return;
+				}
+			}
+
+			if (server.ServerBind != worker.Server.ServerBind)
+			{
+				try
+				{
+					System.Net.IPAddress.Parse(server.ServerBind);
+				}
+				catch (Exception x)
+				{
+					bses.Alert("Error", x.Message);
+					return;
+				}
+			}
+
+			TcpMapService.ReAddServer(server);
+			dlg.Close();
+			StateHasChanged();
+		}
+
+		RenderFragment rf = __builder =>
+		{
+		<div class="mydialog" style="min-width:320px;width:50%;height:50%;background-color:white;padding:32px;border-radius:5px;box-shadow:#999 1px 1px 6px">
+
+			<style>
+				.mydialog form label {
+					display: inline-block;
+					width: 120px;
+					text-align: right;
+					margin: 0 5px;
+				}
+			</style>
+
+			@server.Id - @server.License.Key
+			<hr />
+			<EditForm Model="server">
+				<div>
+					<label>Name</label><InputText @bind-Value="server.License.Name" />
+				</div>
+				<div>
+					<label>Comment</label><InputText @bind-Value="server.Comment" />
+				</div>
+				<div>
+					<label>IsValidated</label><InputCheckbox @bind-Value="server.IsValidated" />
+				</div>
+				<div>
+					<label>IsDisabled</label><InputCheckbox @bind-Value="server.IsDisabled" />
+				</div>
+				<div>
+					<label>ServerBind</label><InputText @bind-Value="server.ServerBind" />
+				</div>
+				<div>
+					<label>ServerPort</label><InputNumber @bind-Value="server.ServerPort" />
+				</div>
+				<div>
+					<label>IPServiceUrl</label><InputText @bind-Value="server.IPServiceUrl" style="width:300px" />
+				</div>
+				<div>
+					<label>AllowConnector</label><InputCheckbox @bind-Value="server.AllowConnector" />
+				</div>
+			</EditForm>
+			<hr />
+			<div style="text-align:center">
+				<button @onclick="Save">Save</button>
+			</div>
+		</div>
+		};
+		Action<BlazorDialog>
+			dlgload = argdlg =>
+			{
+				dlg = argdlg;
+				dlg.CancelHandler = delegate    //ESC or BACK button clicked
+				{
+					dlg.Close();
+				};
+			};
+
+		bses.ShowDialog(rf, dlgload);
+	}
+
+
+	void EditWorker(TcpMapConnectorWorker worker)
+	{
+		var connector = worker.Connector.Clone();
+
+		BlazorDialog dlg = null;
+
+		void Save()
+		{
+			TcpMapService.ReAddConnector(connector);
+			dlg.Close();
+			StateHasChanged();
+		}
+
+		RenderFragment rf = __builder =>
+		{
+		<div class="mydialog" style="min-width:320px;width:50%;height:50%;background-color:white;padding:32px;border-radius:5px;box-shadow:#999 1px 1px 6px">
+
+			<style>
+				.mydialog form label {
+					display: inline-block;
+					width: 120px;
+					text-align: right;
+					margin: 0 5px;
+				}
+			</style>
+
+			@connector.Id
+			<hr />
+			<EditForm Model="connector">
+				<div>
+					<label>Comment</label><InputText @bind-Value="connector.Comment" />
+				</div>
+				<div>
+					<label>IsDisabled</label><InputCheckbox @bind-Value="connector.IsDisabled" />
+				</div>
+				<div>
+					<label>ServerBand</label><InputCheckbox @bind-Value="connector.UseServerBandwidth" />
+				</div>
+				<div>
+					<label>ProxyPort</label><InputCheckbox @bind-Value="connector.UseProxyPort" />
+				</div>
+				<div>
+					<label>UseUDP</label><InputCheckbox @bind-Value="connector.UseUDP" />
+				</div>
+				<div>
+					<label>ServerHost</label><InputText @bind-Value="connector.ServerHost" />
+				</div>
+				<div>
+					<label>ServerPort</label><InputNumber @bind-Value="connector.ServerPort" />
+				</div>
+				<div>
+					<label>LocalBind</label><InputText @bind-Value="connector.LocalBind" />
+				</div>
+				<div>
+					<label>LocalPort</label><InputNumber @bind-Value="connector.LocalPort" />
+				</div>
+			</EditForm>
+			<hr />
+			<div style="text-align:center">
+				<button @onclick="Save">Save</button>
+			</div>
+		</div>
+		};
+		Action<BlazorDialog>
+			dlgload = argdlg =>
+			{
+				dlg = argdlg;
+				dlg.CancelHandler = delegate    //ESC or BACK button clicked
+				{
+					dlg.Close();
+				};
+			};
+
+		bses.ShowDialog(rf, dlgload);
+	}
+
+
+
+
+	static string UPLOAD_TOAST_KEY = "upload_toast";
+
+	async Task UploadHandler_Toast(BlazorUploaderFile file, System.IO.Stream targetstream)
+	{
+
+
+		long readok = 0;
+		byte[] buffer = new byte[1024 * 16];
+		while (true)
+		{
+			double p = Math.Floor(100 * (double)readok / (double)file.FileSize);
+			bses.Toast(file.FileName + " " + p + "% (" + readok / 1024 + "KB/" + file.FileSize / 1024 + "KB)", 5000, UPLOAD_TOAST_KEY);
+			int rc = await file.Stream.ReadAsync(buffer, 0, buffer.Length);
+			if (rc == 0)
+				break;
+			readok += rc;
+			if (readok > file.FileSize)
+				throw new Exception("Invalid stream size");
+
+			if (targetstream != null)
+				await targetstream.WriteAsync(buffer, 0, rc);
+
+			await Task.Delay(100);//control the upload speed
+		}
+		if (readok < file.FileSize)
+			throw new Exception("file upload break");
+
+
+		bses.Toast(file.FileName + " DONE (" + readok / 1024 + "KB) " + file.FileMime, 2000, UPLOAD_TOAST_KEY);
+
+
+	}
+
+	BlazorUploader __clientImportUploader;
+	BlazorUploader clientImportUploader
+	{
+		get
+		{
+			return __clientImportUploader;
+		}
+		set
+		{
+			__clientImportUploader = value;
+			if (__clientImportUploader == null) return;
+			__clientImportUploader.ProcessSingleUploadAsync = async (file) =>
+			{
+				try
+				{
+					var ms = new System.IO.MemoryStream();
+					await UploadHandler_Toast(file, ms);
+					ms.Seek(0, System.IO.SeekOrigin.Begin);
+					string json = new System.IO.StreamReader(ms).ReadToEnd();
+					var lic = System.Text.Json.JsonSerializer.Deserialize<TcpMapLicense>(json);
+					lic.Validate();
+
+					bses.Prompt("Port", "Please type a server port", "", (strport) =>
+					{
+						if (string.IsNullOrWhiteSpace(strport))
+							return;
+						int port;
+						if (!int.TryParse(strport, out port) || port > 65535 || port < 1)
+						{
+							bses.Alert("Error", "Invalid port " + strport);
+							return;
+						}
+						var worker = TcpMapService.CreateClientWorker(lic, port);
+						StateHasChanged();
+						EditWorker(worker);
+					});
+				}
+				catch (Exception x)
+				{
+					bses.Alert("Error", x.ToString());
+				}
+			};
+		}
+	}
+
+	void CreateClientLicense()
+	{
+		bses.Prompt("Port", "Please type a server port", "", (strport) =>
+		{
+			if (string.IsNullOrWhiteSpace(strport))
+				return;
+			int port;
+			if (!int.TryParse(strport, out port) || port > 65535 || port < 1)
+			{
+				bses.Alert("Error", "Invalid port " + strport);
+				return;
+			}
+			TcpMapLicense lic = TcpMapLicense.CreateNew("lic_" + DateTime.Now.Ticks, "Client-" + Guid.NewGuid().ToString().Substring(0, 8));
+			var worker = TcpMapService.CreateClientWorker(lic, port);
+			StateHasChanged();
+			EditWorker(worker);
+		});
+	}
+
+	void CreateServerLicense() => _ = CreateServerLicenseAsync();
+	async Task CreateServerLicenseAsync()
+	{
+		TcpMapLicense lic = TcpMapLicense.CreateNew("lic_" + DateTime.Now.Ticks, "Server-" + Guid.NewGuid().ToString().Substring(0, 8));
+		UIDialogOption opt = new UIDialogOption();
+		opt.Title = "Port";
+		opt.Message = "Please type the server port";
+		opt.ValueValidator = (obj) =>
+		{
+			string str = Convert.ToString(obj);
+			if (string.IsNullOrWhiteSpace(str))
+				return false;
+			int port;
+			if (!int.TryParse(str, out port))
+				return false;
+			if (port < 1 || port > 65535)
+				return false;
+			if (TcpMapService.FindServerWorkerByPort(port) != null)
+				return false;
+			return true;
+		};
+
+		string strport = await bses.PromptAsync(opt);
+		if (string.IsNullOrEmpty(strport))
+			return;
+		var worker = TcpMapService.CreateServerWorker(lic, int.Parse(strport.Trim()));
+		bses.Toast("server created : " + worker.Server.Id);
+
+		StateHasChanged();
+	}
+
+	BlazorUploader __serverImportUploader;
+	BlazorUploader serverImportUploader
+	{
+		get
+		{
+			return __serverImportUploader;
+		}
+		set
+		{
+			__serverImportUploader = value;
+			if (__serverImportUploader == null) return;
+			__serverImportUploader.ProcessSingleUploadAsync = async (file) =>
+			{
+				try
+				{
+					var ms = new System.IO.MemoryStream();
+					await UploadHandler_Toast(file, ms);
+					ms.Seek(0, System.IO.SeekOrigin.Begin);
+					string json = new System.IO.StreamReader(ms).ReadToEnd();
+					var lic = System.Text.Json.JsonSerializer.Deserialize<TcpMapLicense>
+					(json);
+					lic.Validate();
+					UIDialogOption opt = new UIDialogOption();
+					opt.Title = "Port";
+					opt.Message = "Please type the server port";
+					opt.ValueValidator = (obj) =>
+					{
+						string str = Convert.ToString(obj);
+						if (string.IsNullOrWhiteSpace(str))
+							return false;
+						int port;
+						if (!int.TryParse(str, out port))
+							return false;
+						if (port < 1 || port > 65535)
+							return false;
+						if (TcpMapService.FindServerWorkerByPort(port) != null)
+							return false;
+						return true;
+					};
+
+					string strport = await bses.PromptAsync(opt);
+					if (string.IsNullOrEmpty(strport))
+						return;
+					var worker = TcpMapService.CreateServerWorker(lic, int.Parse(strport.Trim()));
+					bses.Toast("server created : " + worker.Server.Id);
+
+					StateHasChanged();
+				}
+				catch (Exception x)
+				{
+					bses.Alert("Error", x.ToString());
+				}
+			};
+		}
+	}
+
+	void ImportLicense()
+	{
+
+	}
+
+	void ShowMessages(IReadOnlyCollection<string>
+	logs)
+	{
+		foreach (string log in logs)
+		{
+			bses.ConsoleLog(log);
+		}
+	}
+}
