@@ -8,9 +8,7 @@ Just a tool for :
 
 ## Some of the features support MacOSX/Windows Now.
 
-# working .. TcpMap tool 
-
-# Progresss v0.0.9 - CPU Monitor
+# Progresss v0.0.10 - TcpMaps features - works , continue
 
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin.png)
 
@@ -21,6 +19,8 @@ Just a tool for :
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin-GPIO.png)
 
 ![Screenshot](https://github.com/BlazorPlus/BlazorLinuxAdmin/raw/master/demoscreenshots/BlazorLinuxAdmin-CPUMonitor.png)
+
+Progresss v0.0.9 - CPU Monitor
 
 Progresss v0.0.8 - Raspbarry Pi GPIO Capture
 
