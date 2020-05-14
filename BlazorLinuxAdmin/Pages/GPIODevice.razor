@@ -188,6 +188,9 @@ else
 
     void CreateAction(BlazorDomTree bdt, PinInfo pin)
     {
+        if (gpioctrl == null)
+            return;
+
         if (!pin.Name.StartsWith("GPIO"))
             return;
 
