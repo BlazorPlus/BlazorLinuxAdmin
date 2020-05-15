@@ -6,26 +6,24 @@
 
 @if (Value == null)
 {
-	<span style="color:red;">No License</span>
+	<span style="display:inline-block;width:200px;color:red;">No License</span>
 }
 else
 {
-	<span>@Value.Key</span>
+	<span style="display:inline-block;width:200px;">@Value.Key</span>
 }
 
 
-<button style="display:inline-block;position:relative;" onclick="this.querySelector('input').click()">
+<button class="btn btn-link" tabindex="-1" @onclick="CreateNewLicenseAsync">Create New </button>
+
+<button class="btn btn-link" style="display:inline-block;position:relative;" onclick="this.querySelector('input').click()">
 	<span>Upload</span>
 	<BlazorUploader @ref="uploader2" style="position:absolute;left:0px;top:0px;width:100%;height:100%;opacity:0" />
 </button>
 
-
-<button @onclick="CreateNewLicenseAsync">Create New </button>
-
-
 @if (Value != null)
 {
-	<button @onclick="()=>ExportLicense(Value)">Export</button>
+	<button class="btn btn-link" @onclick="()=>ExportLicense(Value)">Export</button>
 }
 
 

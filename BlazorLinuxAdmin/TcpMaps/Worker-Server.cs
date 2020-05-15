@@ -8,6 +8,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.IO;
 using System.Net.Http;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 
 namespace BlazorLinuxAdmin.TcpMaps
 {
@@ -145,22 +147,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 			if (tryagainIndex > 3)  //only try 3 times.
 				return;
 
-			TcpMapServerClient sclient = null;
-			lock (_clients)
-			{
-				if (_clients.Count == 1)
-				{
-					sclient = _clients[0];
-				}
-				else if (_clients.Count != 0)
-				{
-					sclient = _clients[Interlocked.Increment(ref nextclientindex) % _clients.Count];
-				}
-				else
-				{
-					// no client
-				}
-			}
+			TcpMapServerClient sclient = FindClient();
 
 			if (sclient == null)
 			{
@@ -247,6 +234,28 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 		}
 
+		internal TcpMapServerClient FindClient()
+		{
+			TcpMapServerClient sclient = null;
+			lock (_clients)
+			{
+				if (_clients.Count == 1)
+				{
+					sclient = _clients[0];
+				}
+				else if (_clients.Count != 0)
+				{
+					sclient = _clients[Interlocked.Increment(ref nextclientindex) % _clients.Count];
+				}
+				else
+				{
+					// no client
+				}
+			}
+
+			return sclient;
+		}
+
 		internal ConcurrentDictionary<string, TcpMapServerSession> sessionMap = new ConcurrentDictionary<string, TcpMapServerSession>();
 
 		public void Stop()
@@ -290,60 +299,139 @@ namespace BlazorLinuxAdmin.TcpMaps
 				list.Remove(client);
 		}
 
+
+	}
+
+	public class TcpMapServerConnector
+	{
+		TcpMapServerWorker _worker;
+		public TcpMapServerConnector(TcpMapServerWorker sworker)
+		{
+			_worker = sworker;
+
+		}
+
 		internal async Task AcceptConnectorAndWorkAsync(Socket clientSock, CommandMessage connmsg)
 		{
-			bool supportEncrypt = false;
+			bool supportEncrypt = _worker.Server.UseEncrypt;
+			if (connmsg.Args[4] == "0") supportEncrypt = false;
+
 			byte[] clientKeyIV;
 			try
 			{
-				this.Server.ConnectorLicense.DescriptSourceKey(Convert.FromBase64String(connmsg.Args[2]), Convert.FromBase64String(connmsg.Args[3]), out clientKeyIV);
+				_worker.Server.ConnectorLicense.DescriptSourceKey(Convert.FromBase64String(connmsg.Args[2]), Convert.FromBase64String(connmsg.Args[3]), out clientKeyIV);
 			}
 			catch (Exception x)
 			{
-				OnError(x);
+				_worker.OnError(x);
 				var failedmsg = new CommandMessage("ConnectFailed", "InvalidSecureKey");
 				await clientSock.SendAsync(failedmsg.Pack(), SocketFlags.None);
 				return;
 			}
 
-			if (connmsg.Args[4] == "0")
+			TcpMapServerClient sclient = _worker.FindClient();
+			if (sclient == null)
 			{
-				supportEncrypt = false;
-			}
-
-
-			var resmsg = new CommandMessage("ConnectOK", "OK", "Connected");
-			await clientSock.SendAsync(resmsg.Pack(), SocketFlags.None);
-
-			Stream _sread, _swrite;
-			if (supportEncrypt)
-			{
-				Server.ConnectorLicense.OverrideStream(clientSock.CreateStream(), clientKeyIV, out _sread, out _swrite);
-			}
-			else
-			{
-				_sread = _swrite = clientSock.CreateStream();
+				var failedmsg = new CommandMessage("ConnectFailed", "NoClient");
+				await clientSock.SendAsync(failedmsg.Pack(), SocketFlags.None);
+				return;
 			}
 
 			string mode = connmsg.Args[5];
+			string connArgument = connmsg.Args[6];
 			if (mode == "USB")//use server bandwidth
 			{
-				Socket localsock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-				string ip = Server.ServerBind;
+				var resmsg = new CommandMessage("ConnectOK", "ConnectOK", supportEncrypt ? "1" : "0");
+				await clientSock.SendAsync(resmsg.Pack(), SocketFlags.None);
+
+				Stream _sread, _swrite;
+				if (supportEncrypt)
+				{
+					_worker.Server.ConnectorLicense.OverrideStream(clientSock.CreateStream(), clientKeyIV, out _sread, out _swrite);
+				}
+				else
+				{
+					_sread = _swrite = clientSock.CreateStream();
+				}
+
+				using Socket localsock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+				string ip = _worker.Server.ServerBind;
 				if (ip == "0.0.0.0") ip = "127.0.0.1";
 				localsock.InitTcp();
-				await localsock.ConnectAsync(ip, Server.ServerPort);
+				await localsock.ConnectAsync(ip, _worker.Server.ServerPort);
 
 				TcpMapConnectorSession session = new TcpMapConnectorSession(new SimpleSocketStream(localsock));
 				await session.DirectWorkAsync(_sread, _swrite);
+			}
+			else if (mode == "UDP")
+			{
+				if (_udpcache == null)
+				{
+					lock (typeof(TcpMapServerConnector))
+					{
+						if (_udpcache == null)
+						{
+							var opt = new MemoryCacheOptions();
+							Microsoft.Extensions.Options.IOptions<MemoryCacheOptions> iopt = Microsoft.Extensions.Options.Options.Create(opt);
+							_udpcache = new MemoryCache(iopt);
+						}
+
+					}
+				}
+
+				UdpInfoItem natinfo;
+				string key = connArgument + ":" + sclient.SessionId;
+				if (!_udpcache.TryGetValue(key, out natinfo) || natinfo.HasExpired())
+				{
+					var udpmsg = await sclient.CreateUDPNatAsync(connArgument);
+					string[] pair = udpmsg.Args[1].Split(':');
+					string addr = pair[0];
+					int port = int.Parse(pair[1]);
+					natinfo = new UdpInfoItem(addr + ":" + port);
+					_udpcache.Set(key, natinfo);
+				}
+
+
+
+				var resmsg = new CommandMessage("ConnectOK", "ConnectOK", supportEncrypt ? "1" : "0", natinfo.NatInfo);
+				await clientSock.SendAsync(resmsg.Pack(), SocketFlags.None);
+
+				resmsg = await CommandMessage.ReadFromSocketAsync(clientSock);
+				if (resmsg == null)
+					return;
+				throw new NotImplementedException("work for " + resmsg);
+			}
+			else if (mode == "RCP")
+			{
+
+				var resmsg = new CommandMessage("ConnectOK", "ConnectOK", supportEncrypt ? "1" : "0"
+					, ((IPEndPoint)sclient._socket.RemoteEndPoint).Address.ToString(), sclient.OptionRouterClientPort.ToString());
+				await clientSock.SendAsync(resmsg.Pack(), SocketFlags.None);
 			}
 			else
 			{
 				throw new NotImplementedException();
 			}
 		}
-	}
 
+		class UdpInfoItem
+		{
+			public UdpInfoItem(string natinfo)
+			{
+				NatInfo = natinfo;
+			}
+			public string NatInfo { get; private set; }
+			DateTime DTStart = DateTime.Now;
+			public bool HasExpired()
+			{
+				return DateTime.Now - DTStart > TimeSpan.FromSeconds(9);
+			}
+		}
+
+		//TODO:use application level global cache..
+		static MemoryCache _udpcache;
+
+	}
 
 	public class TcpMapServerClient
 	{
@@ -352,13 +440,16 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 		}
 
+
+		internal int OptionRouterClientPort;
+
 		static long _nextscid = 30001;
 
 		long _scid = Interlocked.Increment(ref _nextscid);
 
 		TcpMapServerWorker _worker = null;
 		Stream _sread, _swrite;
-		Socket _socket;
+		internal Socket _socket;
 
 		internal bool _is_client = true;
 		internal bool _is_session = false;
@@ -405,51 +496,41 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 			byte[] clientKeyIV;
 
-			bool supportEncrypt = false;
+			_worker = TcpMapService.FindServerWorkerByKey(connmsg.Args[0], int.Parse(connmsg.Args[1]));
 
-			//check and share clientKeyIV
+			string failedreason = null;
+
+			if (_worker == null)
+				failedreason = "NotFound";
+			else if (!_worker.Server.IsValidated)
+				failedreason = "NotValidated";
+			else if (_worker.Server.IsDisabled)
+				failedreason = "NotEnabled";
+
+			if (_worker == null || !string.IsNullOrEmpty(failedreason))
 			{
-
-				_worker = TcpMapService.FindServerWorkerByKey(connmsg.Args[0], int.Parse(connmsg.Args[1]));
-
-				string failedreason = null;
-
-				if (_worker == null)
-					failedreason = "NotFound";
-				else if (!_worker.Server.IsValidated)
-					failedreason = "NotValidated";
-				else if (_worker.Server.IsDisabled)
-					failedreason = "NotEnabled";
-
-				if (_worker == null || !string.IsNullOrEmpty(failedreason))
-				{
-					var failedmsg = new CommandMessage() { Name = "ConnectFailed", Args = new string[] { failedreason } };
-					await _socket.SendAsync(failedmsg.Pack(), SocketFlags.None);
-					return;
-				}
-
-				try
-				{
-					_worker.Server.License.DescriptSourceKey(Convert.FromBase64String(connmsg.Args[2]), Convert.FromBase64String(connmsg.Args[3]), out clientKeyIV);
-				}
-				catch (Exception x)
-				{
-					_worker.OnError(x);
-					var failedmsg = new CommandMessage() { Name = "ConnectFailed", Args = new string[] { "InvalidSecureKey" } };
-					await _socket.SendAsync(failedmsg.Pack(), SocketFlags.None);
-					return;
-				}
-
-				if (connmsg.Args[4] == "0")
-				{
-					supportEncrypt = false;
-				}
-
-				//not encrypt
-				var successMsg = new CommandMessage() { Name = "ConnectOK", Args = new string[] { "ConnectOK", supportEncrypt ? "1" : "0" } };
-				await _socket.SendAsync(successMsg.Pack(), SocketFlags.None);
-
+				var failedmsg = new CommandMessage("ConnectFailed", failedreason);
+				await _socket.SendAsync(failedmsg.Pack(), SocketFlags.None);
+				return;
 			}
+
+			bool supportEncrypt = _worker.Server.UseEncrypt;
+			if (connmsg.Args[4] == "0") supportEncrypt = false;
+
+			try
+			{
+				_worker.Server.License.DescriptSourceKey(Convert.FromBase64String(connmsg.Args[2]), Convert.FromBase64String(connmsg.Args[3]), out clientKeyIV);
+			}
+			catch (Exception x)
+			{
+				_worker.OnError(x);
+				var failedmsg = new CommandMessage("ConnectFailed", "InvalidSecureKey");
+				await _socket.SendAsync(failedmsg.Pack(), SocketFlags.None);
+				return;
+			}
+
+			var successMsg = new CommandMessage("ConnectOK", "ConnectOK", supportEncrypt ? "1" : "0");
+			await _socket.SendAsync(successMsg.Pack(), SocketFlags.None);
 
 			if (supportEncrypt)
 			{
@@ -474,6 +555,9 @@ namespace BlazorLinuxAdmin.TcpMaps
 			{
 				if (_is_client)
 				{
+
+					_ = _swrite.WriteAsync(new CommandMessage("SetOption", "ClientEndPoint", _socket.RemoteEndPoint.ToString()).Pack());
+
 					while (true)
 					{
 						var msg = await CommandMessage.ReadFromStreamAsync(_sread);
@@ -489,8 +573,21 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 						switch (msg.Name)
 						{
+							case "SetOption":
+								string optvalue = msg.Args[1];
+								switch (msg.Args[0])
+								{
+									case "RouterClientPort":
+										this.OptionRouterClientPort = int.Parse(optvalue);
+										break;
+									default:
+										_worker.LogMessage("Error:Ignore option " + msg);
+										break;
+								}
+								break;
 							case "StartSessionResult":
 							case "CloseSessionResult":
+							case "CreateUDPNatResult":
 								long reqid = long.Parse(msg.Args[0]);
 								if (reqmap.TryGetValue(reqid, out var ritem))
 								{
@@ -647,20 +744,26 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 		public async Task StartSessionAsync(string sid)
 		{
-			await SendSidCmdAsync(sid, "StartSession");
+			await SendCmdAsync("StartSession", sid);
 		}
 
 		public async Task CloseSessionAsync(string sid)
 		{
-			await SendSidCmdAsync(sid, "CloseSession");
+			await SendCmdAsync("CloseSession", sid);
 		}
-		async Task SendSidCmdAsync(string sid, string cmd)
+
+		public async Task<CommandMessage> CreateUDPNatAsync(string natinfo)
+		{
+			return await SendCmdAsync("CreateUDPNat", natinfo);
+		}
+
+		async Task<CommandMessage> SendCmdAsync(string cmd, string arg)
 		{
 			int timeout = 18000;
 			long reqid = Interlocked.Increment(ref nextreqid);
 			CommandMessage msg = new CommandMessage();
 			msg.Name = cmd;
-			msg.Args = new string[] { reqid.ToString(), sid, timeout.ToString() };
+			msg.Args = new string[] { reqid.ToString(), arg, timeout.ToString() };
 
 			RequestItem ritem = new RequestItem();
 
@@ -678,9 +781,10 @@ namespace BlazorLinuxAdmin.TcpMaps
 				if (ritem.Response == null)
 					throw new Exception($"No Response ? ");
 
-				if (ritem.Response.Args[2] == "Error")
+				if (ritem.Response.Args[1] == "Error")
 					throw new Exception("Command Failed.");
 
+				return ritem.Response;
 			}
 			finally
 			{

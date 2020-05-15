@@ -53,18 +53,6 @@
 
 }
 
-<h4>
-	TcpMaps
-	<button @onclick="StateHasChanged">Refresh</button>
-</h4>
-
-@TcpMapService.IsServiceAdded
-@TcpMapService.IsServiceRunning
-@TcpMapService.LogMessages.LastOrDefault();
-
-
-
-<hr />
 
 <style>
 	.mytable, .mytable td, .mytable th {
@@ -75,7 +63,35 @@
 		font-size: 16px;
 		font-weight: bold;
 	}
+
+	.mydialog form label {
+		display: inline-block;
+		width: 120px;
+		text-align: right;
+		margin: 0 5px;
+		white-space:nowrap;
+	}
+
+	.mydialog form .options {
+		padding-left: 64px;
+	}
+		.mydialog form .options label {
+			text-align: left;
+		}
 </style>
+
+<h4>
+	TcpMaps
+	<button @onclick="StateHasChanged">Refresh</button>
+</h4>
+
+@TcpMapService.IsServiceAdded
+@TcpMapService.IsServiceRunning
+@TcpMapService.IsUDPServiceRunning
+@TcpMapService.LogMessages.LastOrDefault();
+
+
+<hr />
 
 <fieldset class="tcpmapsfieldset">
 	<legend>
@@ -278,7 +294,7 @@
 				<td>@worker.Connector.LocalPort</td>
 				<td>@worker.Connector.ServerHost</td>
 				<td>@worker.Connector.ServerPort</td>
-				<td>@(worker.Connector.UseServerBandwidth?"1":"0"),@(worker.Connector.UseProxyPort?"1":"0"),@(worker.Connector.UseUDP?"1":"0")</td>
+				<td>@(worker.Connector.UseServerBandwidth?"1":"0"),@(worker.Connector.UseRouterClientPort ? "1":"0"),@(worker.Connector.UseRouterSecurePort?"1":"0"),@(worker.Connector.UseUDPPunching?"1":"0")</td>
 				<td>
 					@if (worker.IsListened)
 					{
@@ -412,17 +428,7 @@ this.setAttribute('href',url);
 
 		RenderFragment rf = __builder =>
 		{
-		<div class="mydialog" style="min-width:320px;width:50%;height:50%;background-color:white;padding:32px;border-radius:5px;box-shadow:#999 1px 1px 6px">
-
-			<style>
-				.mydialog form label {
-					display: inline-block;
-					width: 120px;
-					text-align: right;
-					margin: 0 5px;
-				}
-			</style>
-
+		<div class="mydialog" style="min-width:320px;width:50%;min-height:50%;background-color:white;padding:32px;border-radius:5px;box-shadow:#999 1px 1px 6px">
 			@client.Id - @client.License.Key
 			<hr />
 			<EditForm Model="client">
@@ -431,9 +437,6 @@ this.setAttribute('href',url);
 				</div>
 				<div>
 					<label>Comment</label><InputText @bind-Value="client.Comment" />
-				</div>
-				<div>
-					<label>IsDisabled</label><InputCheckbox @bind-Value="client.IsDisabled" />
 				</div>
 				<div>
 					<label>ServerHost</label><InputText @bind-Value="client.ServerHost" />
@@ -449,6 +452,13 @@ this.setAttribute('href',url);
 				</div>
 				<div>
 					<label>Pre-Session</label><InputNumber @bind-Value="client.PreSessionCount" />
+				</div>
+				<div>
+					<label>RouterClientPort</label><InputNumber @bind-Value="client.RouterClientPort" />
+				</div>
+				<div class="options">
+					<label><InputCheckbox @bind-Value="client.IsDisabled" />IsDisabled</label>
+					<label><InputCheckbox @bind-Value="client.UseEncrypt" />UseEncrypt</label>
 				</div>
 			</EditForm>
 			<hr />
@@ -521,16 +531,7 @@ this.setAttribute('href',url);
 
 		RenderFragment rf = __builder =>
 		{
-		<div class="mydialog" style="min-width:320px;width:50%;height:50%;background-color:white;padding:32px;border-radius:5px;box-shadow:#999 1px 1px 6px">
-
-			<style>
-				.mydialog form label {
-					display: inline-block;
-					width: 120px;
-					text-align: right;
-					margin: 0 5px;
-				}
-			</style>
+		<div class="mydialog" style="min-width:320px;width:50%;min-height:50%;background-color:white;padding:32px;border-radius:5px;box-shadow:#999 1px 1px 6px">
 
 			@server.Id - @server.License.Key
 			<hr />
@@ -541,12 +542,7 @@ this.setAttribute('href',url);
 				<div>
 					<label>Comment</label><InputText @bind-Value="server.Comment" />
 				</div>
-				<div>
-					<label>IsValidated</label><InputCheckbox @bind-Value="server.IsValidated" />
-				</div>
-				<div>
-					<label>IsDisabled</label><InputCheckbox @bind-Value="server.IsDisabled" />
-				</div>
+
 				<div>
 					<label>ServerBind</label><InputText @bind-Value="server.ServerBind" />
 				</div>
@@ -557,10 +553,16 @@ this.setAttribute('href',url);
 					<label>IPServiceUrl</label><InputText @bind-Value="server.IPServiceUrl" style="width:300px" />
 				</div>
 				<div>
-					<label>AllowConnector</label><InputCheckbox @bind-Value="server.AllowConnector" />
+					<label>ConnectorLic</label><TcpMaps_InputLicense @bind-Value="server.ConnectorLicense" />
 				</div>
-				<div>
-					<label>ConnectorLicense</label><TcpMaps_InputLicense @bind-Value="server.ConnectorLicense" />
+				<div class="options">
+					<label><InputCheckbox @bind-Value="server.IsValidated" />IsValidated</label>
+
+					<label><InputCheckbox @bind-Value="server.IsDisabled" />IsDisabled</label>
+
+					<label><InputCheckbox @bind-Value="server.UseEncrypt" />UseEncrypt</label>
+
+					<label><InputCheckbox @bind-Value="server.AllowConnector" />AllowConnector</label>
 				</div>
 			</EditForm>
 			<hr />
@@ -598,16 +600,9 @@ this.setAttribute('href',url);
 
 		RenderFragment rf = __builder =>
 		{
-		<div class="mydialog" style="min-width:320px;width:50%;height:50%;background-color:white;padding:32px;border-radius:5px;box-shadow:#999 1px 1px 6px">
+		<div class="mydialog" style="min-width:320px;width:50%;min-height:50%;background-color:white;padding:32px;border-radius:5px;box-shadow:#999 1px 1px 6px">
 
-			<style>
-				.mydialog form label {
-					display: inline-block;
-					width: 120px;
-					text-align: right;
-					margin: 0 5px;
-				}
-			</style>
+
 
 			@connector.Id
 			<hr />
@@ -617,18 +612,6 @@ this.setAttribute('href',url);
 				</div>
 				<div>
 					<label>Comment</label><InputText @bind-Value="connector.Comment" />
-				</div>
-				<div>
-					<label>IsDisabled</label><InputCheckbox @bind-Value="connector.IsDisabled" />
-				</div>
-				<div>
-					<label>ServerBand</label><InputCheckbox @bind-Value="connector.UseServerBandwidth" />
-				</div>
-				<div>
-					<label>ProxyPort</label><InputCheckbox @bind-Value="connector.UseProxyPort" />
-				</div>
-				<div>
-					<label>UseUDP</label><InputCheckbox @bind-Value="connector.UseUDP" />
 				</div>
 				<div>
 					<label>ServerHost</label><InputText @bind-Value="connector.ServerHost" />
@@ -641,6 +624,19 @@ this.setAttribute('href',url);
 				</div>
 				<div>
 					<label>LocalPort</label><InputNumber @bind-Value="connector.LocalPort" />
+				</div>
+				<div class="options">
+					<label><InputCheckbox @bind-Value="connector.IsDisabled" />IsDisabled</label>
+
+					<label><InputCheckbox @bind-Value="connector.UseEncrypt" />UseEncrypt</label>
+
+					<label><InputCheckbox @bind-Value="connector.UseServerBandwidth" />ServerBandwidth</label>
+
+					<label><InputCheckbox @bind-Value="connector.UseRouterClientPort" />RouterClient</label>
+
+					<label><InputCheckbox @bind-Value="connector.UseUDPPunching" />UDPPunching</label>
+
+					<label><InputCheckbox @bind-Value="connector.UDPCachePort" />UDPCachePort</label>
 				</div>
 			</EditForm>
 			<hr />

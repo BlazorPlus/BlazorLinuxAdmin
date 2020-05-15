@@ -31,7 +31,31 @@ namespace BlazorLinuxAdmin.TcpMaps
 		protected override async Task<CommandMessage> ReadMessageAsync()
 		{
 			ReadAgain:
-			var msg = await CommandMessage.ReadFromStreamAsync(_sread);
+
+			CommandMessage msg;
+			var cts = new CancellationTokenSource();
+			_ = Task.Run(async delegate
+			{
+				if (await cts.Token.WaitForSignalSettedAsync(16000))
+					return;
+				try
+				{
+					await _swrite.WriteAsync(new CommandMessage("_ping_", "forread").Pack());
+				}
+				catch (Exception x)
+				{
+					OnError(x);
+				}
+			});
+			try
+			{
+				msg = await CommandMessage.ReadFromStreamAsync(_sread);
+			}
+			finally
+			{
+				cts.Cancel();
+			}
+
 			if (msg == null || msg.Name == "data")
 				return msg;
 

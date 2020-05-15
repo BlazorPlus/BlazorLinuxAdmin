@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.IO;
 using System.Security.Cryptography;
 using System.Security.Policy;
+using System.Net.Security;
 
 namespace BlazorLinuxAdmin.TcpMaps
 {
@@ -110,7 +111,15 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 		public void OverrideStream(Stream stream, byte[] keyIV, out Stream sread, out Stream swrite)
 		{
-			throw new NotSupportedException();
+			Console.WriteLine("OverrideStream : " + Key + " : " + BitConverter.ToString(keyIV));
+
+			var tdes = TripleDES.Create();
+			tdes.Key = keyIV.AsSpan().Slice(0, 24).ToArray();
+			tdes.IV = keyIV.AsSpan().Slice(24, 8).ToArray();
+			sread = Crypto.BlockCryptoStream.CreateDecryptReader(stream, tdes);
+			swrite = Crypto.BlockCryptoStream.CreateEncryptWriter(stream, tdes);
+
+			//throw new NotSupportedException();
 			//swrite = stream;
 			//sread = stream;
 
@@ -141,9 +150,14 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 		public int ClientPort { get; set; }
 
-		public int ProxyRoutePort { get; set; }    //
+		public int RouterClientPort { get; set; }    // the connector connect to the router mapped ClientPort directly 
+
+		//public int RouterSecurePort { get; set; }	//laster , let client&connector connect in a secure way
+		//public int SecurePort { get; set; }	// listen this port , handle requests from RouterSecurePort
 
 		public bool IsDisabled { get; set; }
+
+		public bool UseEncrypt { get; set; }
 
 		public int PreSessionCount { get; set; }
 
@@ -177,6 +191,8 @@ namespace BlazorLinuxAdmin.TcpMaps
 		public bool IsDisabled { get; set; }
 
 		public bool IsValidated { get; set; }
+
+		public bool UseEncrypt { get; set; }
 
 		public string IPServiceUrl { get; set; }
 
@@ -216,12 +232,18 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 		public bool IsDisabled { get; set; }
 
+		public bool UseEncrypt { get; set; }
+
 		//Default is false , at most case the ProxyRoutePort/UDP shall works
 		public bool UseServerBandwidth { get; set; }
 
-		public bool UseProxyPort { get; set; }
+		public bool UseRouterClientPort { get; set; }
 
-		public bool UseUDP { get; set; }
+		public bool UseRouterSecurePort { get; set; }
+
+		public bool UseUDPPunching { get; set; }
+
+		public bool UDPCachePort { get; set; }
 
 		public TcpMapConnector Clone()
 		{
@@ -233,6 +255,9 @@ namespace BlazorLinuxAdmin.TcpMaps
 	public class CommandMessage
 	{
 		public const int MAX_PACKAGE_SIZE = 1024 * 1024;
+
+		public const string STR_H8 = "CMDMSGv1";
+		public const string END_H8 = "ENDMSGv1";
 
 		public string Name { get; set; }
 		public Memory<byte> Data { get; set; }
@@ -249,8 +274,6 @@ namespace BlazorLinuxAdmin.TcpMaps
 		}
 
 
-		const string STR_H8 = "CMDMSGv1";
-		const string END_H8 = "ENDMSGv1";
 
 		static public async Task<CommandMessage> ReadFromSocketAsync(Socket socket)
 		{
@@ -319,7 +342,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 			return UnpackRest(ms);
 		}
 
-		static CommandMessage UnpackRest(MemoryStream ms)
+		static internal CommandMessage UnpackRest(MemoryStream ms)
 		{
 			CommandMessage msg = new CommandMessage();
 
@@ -392,7 +415,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 			byte[] bsiv = BitConverter.GetBytes((uint)data.Length);
 			Buffer.BlockCopy(bsiv, 0, data, 8, 4);
 
-			if(data.Length>capacity)
+			if (data.Length > capacity)
 				Console.WriteLine("capacity :" + data.Length + "/" + capacity);
 
 			return data;

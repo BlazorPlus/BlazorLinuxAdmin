@@ -31,6 +31,8 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 		public static bool IsServiceRunning { get; private set; }
 
+		public static bool IsUDPServiceRunning { get; private set; }
+
 		public static Exception ServiceError { get; private set; }
 
 		public static ConcurrentQueue<Exception> ServiceErrors { get; } = new ConcurrentQueue<Exception>();
@@ -64,7 +66,35 @@ namespace BlazorLinuxAdmin.TcpMaps
 		{
 			IsServiceAdded = true;
 			StartService();
+			StartUDPService();
 		}
+
+		static UdpClient _udp6023;
+		static void StartUDPService()
+		{
+			_udp6023 = new UdpClient(new IPEndPoint(IPAddress.Any, 6023));
+			_ = WorkUDPAsync();
+			IsUDPServiceRunning = true;
+		}
+		static async Task WorkUDPAsync()
+		{
+			while (IsServiceRunning)
+			{
+				try
+				{
+					var result = await _udp6023.ReceiveAsync();
+					byte[] data = System.Text.Encoding.ASCII.GetBytes("UDP=" + result.RemoteEndPoint);
+					_ = _udp6023.SendAsync(data, data.Length, result.RemoteEndPoint);
+				}
+				catch (Exception x)
+				{
+					OnError(x);
+				}
+			}
+			_udp6023.Dispose();
+			_udp6023 = null;
+		}
+
 
 		static TcpListener _listener6022;
 
@@ -207,7 +237,8 @@ namespace BlazorLinuxAdmin.TcpMaps
 						}
 						else
 						{
-							await server.AcceptConnectorAndWorkAsync(socket, msg);
+							TcpMapServerConnector connector = new TcpMapServerConnector(server);
+							await connector.AcceptConnectorAndWorkAsync(socket, msg);
 						}
 						break;
 					case ""://other direct request..

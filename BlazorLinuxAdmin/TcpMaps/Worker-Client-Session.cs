@@ -106,7 +106,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 				try
 				{
-					bool supportEncrypt = false;
+					bool supportEncrypt = Client.UseEncrypt;
 					byte[] clientKeyIV;
 
 					{
@@ -143,9 +143,9 @@ namespace BlazorLinuxAdmin.TcpMaps
 							throw new Exception(connmsg.Name + " : " + string.Join(",", connmsg.Args));
 						}
 
-						if (connmsg.Args[1] == "0")
+						if (supportEncrypt && connmsg.Args[1] == "0")
 						{
-							supportEncrypt = false;
+							supportEncrypt = false; LogMessage("Warning:server don't support encryption.");
 						}
 
 					}

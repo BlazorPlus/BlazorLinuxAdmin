@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -57,11 +58,12 @@ namespace BlazorLinuxAdmin.TcpMaps
 				{
 					//TcpMapService.LogMessage(this.GetType().Name + " ReadMessageAsync");
 					var msg = await ReadMessageAsync();
-					//TcpMapService.LogMessage(this.GetType().Name + " ReadMessageAsync DONE : " + msg);
 					if (msg == null)
 						return;
 					if (msg.Name == "data")
 					{
+						//TcpMapService.LogMessage(this.GetType().Name + " ReadMessageAsync DONE : " + msg);
+						//TcpMapService.LogMessage("Data:" + Encoding.UTF8.GetString(msg.Data.ToArray()));
 						await stream.WriteAsync(msg.Data);
 					}
 					else
@@ -71,9 +73,13 @@ namespace BlazorLinuxAdmin.TcpMaps
 					//TcpMapService.LogMessage(this.GetType().Name + " WriteAsync DONE : " + msg);
 				}
 			}
+			catch(ObjectDisposedException)
+			{
+				//no log
+			}
 			catch (Exception x)
 			{
-				//TcpMapService.OnError(x);
+				TcpMapService.OnError(x);
 			}
 			finally
 			{

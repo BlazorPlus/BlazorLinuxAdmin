@@ -8,6 +8,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.IO;
 using System.Net.Http;
+using BlazorLinuxAdmin.TcpMaps.UDP;
 
 namespace BlazorLinuxAdmin.TcpMaps
 {
@@ -113,13 +114,77 @@ namespace BlazorLinuxAdmin.TcpMaps
 			}
 		}
 
+		DateTime _stopUseRouterClientPortUntil;
+		DateTime _stopUseUDPPunchingUntil;
+
 		async Task ProcessSocketAsync(Socket tcpSocket)
 		{
+		TryAgain:
+
+			string connmode = null;
+			if (Connector.UseRouterClientPort && DateTime.Now > _stopUseRouterClientPortUntil)
+			{
+				connmode = "RCP";
+			}
+			else if (Connector.UseUDPPunching && DateTime.Now > _stopUseRouterClientPortUntil)
+			{
+				connmode = "UDP";
+			}
+			else if (Connector.UseServerBandwidth)
+			{
+				connmode = "USB";
+			}
+			else
+			{
+				//TODO:  try ..
+				if (Connector.UseUDPPunching)
+					connmode = "UDP";
+				else if (Connector.UseRouterClientPort)
+					connmode = "RCP";
+				else
+					throw new Exception("No connection mode.");
+			}
+
+
+			Task<KeyValuePair<string, UDPClientListener>> task2 = null;
+
+			if (connmode == "UDP")
+			{
+				//TODO: shall cache the UDPClientListener ...
+				task2 = Task.Run(GetUdpClientAsync);
+			}
+
 			Socket serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 			serverSocket.InitTcp();
 			await serverSocket.ConnectAsync(Connector.ServerHost, 6022);
 
-			bool supportEncrypt = false;
+			string connArgument = null;
+			UDPClientListener udp = null;
+			if (task2 != null)
+			{
+				try
+				{
+					var kvp = await task2;
+					connArgument = kvp.Key;
+					udp = kvp.Value;
+
+				}
+				catch (Exception x)
+				{
+					OnError(x);
+					LogMessage("UDP Failed , switch ...");
+					if (Connector.UseServerBandwidth)
+					{
+						connmode = "USB";
+					}
+					else
+					{
+						throw new Exception(x.Message, x);
+					}
+				}
+			}
+
+			bool supportEncrypt = Connector.UseEncrypt;
 			byte[] clientKeyIV;
 
 			CommandMessage connmsg = new CommandMessage();
@@ -132,40 +197,187 @@ namespace BlazorLinuxAdmin.TcpMaps
 			arglist.Add(Convert.ToBase64String(encryptedKeyIV));
 			arglist.Add(Convert.ToBase64String(sourceHash));
 			arglist.Add(supportEncrypt ? "1" : "0");
-			arglist.Add("USB");
+			arglist.Add(connmode);
+			arglist.Add(connArgument);
 			connmsg.Args = arglist.ToArray();
 
 			await serverSocket.SendAsync(connmsg.Pack(), SocketFlags.None);
 
 			connmsg = await CommandMessage.ReadFromSocketAsync(serverSocket);
 
-			if(connmsg==null)
+			if (connmsg == null)
 			{
 				LogMessage("Warning:ConnectorWorker : remote closed connection.");
 				return;
 			}
 
-			LogMessage("Warning:connmsg : " + connmsg);
+			//LogMessage("Warning:connmsg : " + connmsg);
 
 			if (connmsg.Name != "ConnectOK")
 			{
 				return;
 			}
 
+			//TODO: add to session list
+
+			if (supportEncrypt && connmsg.Args[1] == "0")
+			{
+				supportEncrypt = false; LogMessage("Warning:server don't support encryption : " + Connector.ServerHost);
+			}
 
 			Stream _sread, _swrite;
-			if (supportEncrypt)
+
+			if (connmode == "RCP")
 			{
-				Connector.License.OverrideStream(serverSocket.CreateStream(), clientKeyIV, out _sread, out _swrite);
+				serverSocket.CloseSocket();
+
+				string ip = connmsg.Args[2];
+				int port = int.Parse(connmsg.Args[3]);
+				if (port < 1)
+				{
+					LogMessage("Error:Invalid configuration , remote-client-side don't provide RouterClientPort , stop use RCP for 1min");
+					_stopUseRouterClientPortUntil = DateTime.Now.AddSeconds(60);
+					goto TryAgain;//TODO: reuse the serverSocket and switch to another mode 
+				}
+
+				LogMessage("Warning:" + tcpSocket.LocalEndPoint + " forward to " + ip + ":" + port);
+				await tcpSocket.ForwardToAndWorkAsync(ip, port);
+
+				return;
+			}
+
+
+			if (connmode == "UDP")
+			{
+				LogMessage("MY UDP..." + connArgument + " REMOTE..." + connmsg.Args[2]);
+
+				string mynat = connArgument;
+				string[] pair = connmsg.Args[2].Split(':');
+
+				serverSocket.CloseSocket();
+
+				try
+				{
+					UDPClientStream stream = await UDPClientStream.ConnectAsync(udp, pair[0], int.Parse(pair[1]), TimeSpan.FromSeconds(6));
+
+					_sread = stream;
+					_swrite = stream;
+
+					LogMessage("UDP Connected #" + stream.SessionId + " " + connArgument + " .. " + connmsg.Args[2]);
+				}
+				catch (Exception x)
+				{
+					LogMessage("UDP ERROR " + connArgument + " .. " + connmsg.Args[2] + " " + x.Message);
+					throw;
+				}
 			}
 			else
 			{
-				_sread = _swrite = serverSocket.CreateStream();
+				if (supportEncrypt)
+				{
+					Connector.License.OverrideStream(serverSocket.CreateStream(), clientKeyIV, out _sread, out _swrite);
+				}
+				else
+				{
+					_sread = _swrite = serverSocket.CreateStream();
+				}
 			}
 
 			TcpMapConnectorSession session = new TcpMapConnectorSession(new SimpleSocketStream(tcpSocket));
 			await session.DirectWorkAsync(_sread, _swrite);
 
+		}
+
+		string _lastnat;
+		UDPClientListener _lastudp;
+		DateTime _timeudp;
+		CancellationTokenSource _ctsudpnew;
+
+		async Task<KeyValuePair<string, UDPClientListener>> GetUdpClientAsync()
+		{
+			if (!Connector.UDPCachePort)
+				return await CreteUdpClientAsync();
+
+			TryAgain:
+
+			if (_lastudp != null && DateTime.Now - _timeudp < TimeSpan.FromSeconds(8))
+			{
+				lock (this)
+				{
+					return new KeyValuePair<string, UDPClientListener>(_lastnat, _lastudp);
+				}
+			}
+
+			bool ctsCreated = false;
+			CancellationTokenSource cts = _ctsudpnew;
+			if (cts == null)
+			{
+				lock (this)
+				{
+					if (_ctsudpnew == null)
+					{
+						_ctsudpnew = new CancellationTokenSource();
+						ctsCreated = true;
+					}
+					cts = _ctsudpnew;
+				}
+			}
+
+			if (!ctsCreated)
+			{
+				await cts.Token.WaitForSignalSettedAsync(3000);
+				goto TryAgain;
+			}
+
+			try
+			{
+				//TODO: cache the port and reuse.
+
+				var kvp = await CreteUdpClientAsync();
+
+				lock (this)
+				{
+					_lastnat = kvp.Key;
+					_lastudp = kvp.Value;
+					_timeudp = DateTime.Now;
+				}
+
+				return kvp;
+			}
+			finally
+			{
+				lock (this)
+				{
+					cts.Cancel();
+					_ctsudpnew = null;
+				}
+			}
+
+
+		}
+
+		async Task<KeyValuePair<string, UDPClientListener>> CreteUdpClientAsync()
+		{
+			UdpClient udp = new UdpClient();
+
+			udp.Client.ReceiveTimeout = 4321;
+			udp.Client.SendTimeout = 4321;
+			udp.Send(System.Text.Encoding.ASCII.GetBytes("whoami"), 6, Connector.ServerHost, 6023);
+
+			LogMessage("Warning:udp.ReceiveAsync");
+
+			var rr = await udp.ReceiveAsync();
+			string exp = System.Text.Encoding.ASCII.GetString(rr.Buffer);
+
+			LogMessage("Warning:udp get " + exp);
+
+			if (!exp.StartsWith("UDP="))
+				throw (new Exception("failed"));
+
+			string natinfo = exp.Remove(0, 4);
+			UDPClientListener udpc = new UDPClientListener(udp);
+
+			return new KeyValuePair<string, UDPClientListener>(natinfo, udpc);
 		}
 
 		public void Stop()
@@ -179,15 +391,9 @@ namespace BlazorLinuxAdmin.TcpMaps
 				lis.Stop();
 			}
 			if (cts != null) cts.Cancel();
-			//close all clients/sessions
-			//lock (_clients)
-			//	foreach (var item in _clients.ToArray())
-			//		item.Stop();
-			//lock (_sessions)
-			//	foreach (var item in _sessions.ToArray())
-			//		item.Stop();
 		}
 
-
 	}
+
+
 }

@@ -75,7 +75,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 				case "_ping_result_":
 					break;
 				default:
-					TcpMapService.LogMessage("Error: 3 Ignore message " + msg);
+					TcpMapService.LogMessage("Error: 6 Ignore message " + msg);
 					break;
 			}
 			goto ReadAgain;
