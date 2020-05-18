@@ -3,223 +3,215 @@
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment whe
 
 @code{
-    bool AllowEnterDirectlyInDevMode = true;   //Warning:don't turn on it at server
+	bool AllowEnterDirectlyInDevMode = false;   //Warning:don't turn on it at server
 }
 
 @if (BlazorSession.Current.Browser == null)
 {
-    BlazorSession.Current.SetTimeout(10, StateHasChanged);
-    return;
+	BlazorSession.Current.SetTimeout(10, StateHasChanged);
+	return;
 }
 
 @if (viewmode == "connecting")
 {
-    <div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:32px;">
-        <div>
-            Checking permission for @username ...
-        </div>
-    </div>
+	<div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:32px;">
+		<div>
+			Checking permission for @username ...
+		</div>
+	</div>
 
-    return;
+	return;
 }
 
 @if (viewmode == null)
 {
-    if (BlazorSession.Current.Browser.GetMemoryItem("LogonOK") as string != "OK")
-    {
-        if (AllowEnterDirectlyInDevMode && whe.EnvironmentName == "Development")
-        {
-            void LoginForDev()
-            {
-                BlazorSession.Current.Browser.SetMemoryItem("LogonOK", "OK");
-            }
+	if (BlazorSession.Current.Browser.GetMemoryItem("LogonOK") as string != "OK")
+	{
+		if (AllowEnterDirectlyInDevMode && whe.EnvironmentName == "Development")
+		{
+			void LoginForDev()
+			{
+				BlazorSession.Current.Browser.SetMemoryItem("LogonOK", "OK");
+			}
 
-            <div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:32px;">
-                <h1>
-                    Development
-                </h1>
-                <div>
-                    In Development mode , you can use this app directly.
-                </div>
-                <div>
-                    In Production mode , you must login into linux via ssh localhost:22
-                </div>
-                <button class="btn btn-primary" style="margin:32px;width:100px;" @onclick="LoginForDev">
-                    OK
-                </button>
-            </div>
-            return;
-        }
-        else
-        {
-            username = BlazorSession.Current.Browser.GetMemoryItem("console_username") as string;
-            password = BlazorSession.Current.Browser.GetMemoryItem("console_password") as string;
-            viewmode = "login";
-        }
-    }
+			<div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:32px;">
+				<h1>
+					Development
+				</h1>
+				<div>
+					In Development mode , you can use this app directly.
+				</div>
+				<div>
+					In Production mode , you must login into linux via ssh localhost:22
+				</div>
+				<button class="btn btn-primary" style="margin:32px;width:100px;" @onclick="LoginForDev">
+					OK
+				</button>
+			</div>
+			return;
+		}
+		else
+		{
+			username = BlazorSession.Current.Browser.GetMemoryItem("console_username") as string;
+			password = BlazorSession.Current.Browser.GetMemoryItem("console_password") as string;
+			viewmode = "login";
+		}
+	}
 }
 
 @if (viewmode == "login")
 {
-    @*if (Environment.OSVersion.ToString().Contains("Windows"))
-            {
-                <div style="text-align:center;padding:32px;width:360px;margin:auto">
-                    <h3>Windows + Production</h3>
-                    <h3>Is Disabled for secure</h3>
-                    <p>To test BlazorLinuxAdmin in windows</p>
-                    <p>set </p>
-                    <p>ASPNETCORE_ENVIRONMENT=Development</p>
-                    <p>Example bat file : </p>
-                    <pre style="text-align:left;width:280px;overflow:visible;display:inline-block;font-size:12px">
-        SET ASPNETCORE_ENVIRONMENT=Development
-        BlazorLinuxAdmin.exe</pre>
-                </div>
-                return;
-            }*@
+	<style>
+		.label_1 {
+			display: inline-block;
+			width: 100px;
+			text-align: right;
+		}
+	</style>
+	<div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:32px;">
+		<h1>BlazorLinuxAdmin</h1>
+		<h3>OS : @Environment.OSVersion + @(Environment.Is64BitOperatingSystem?"64bit":"32bit")</h3>
+		<EditForm Model="this">
+			<span class="label_1">username:</span><InputText class="inp_username" @bind-Value="username" />
+			<br />
+			<span class="label_1">password:</span><InputText class="inp_password" type="password" @bind-Value="password" />
+			<br />
+			<span class="label_1"></span><button @onclick="DoLogin">Login</button>
+		</EditForm>
+		<br />
+		<h4 style="color:red;text-align:center;">Warning<br />This application is no safe<br />Don't use it for public network</h4>
+	</div>
 
-    <style>
-        .label_1 {
-            display: inline-block;
-            width: 100px;
-            text-align: right;
-        }
-    </style>
-    <div style="display:flex;flex-direction:column;align-items:center;width:100%;padding:32px;">
-        <h1>BlazorLinuxAdmin</h1>
-        <h3>OS : @Environment.OSVersion + @(Environment.Is64BitOperatingSystem?"64bit":"32bit")</h3>
-        <EditForm Model="this">
-            <span class="label_1">username:</span><InputText class="inp_username" @bind-Value="username" />
-            <br />
-            <span class="label_1">password:</span><InputText class="inp_password" type="password" @bind-Value="password" />
-            <br />
-            <span class="label_1"></span><button @onclick="DoLogin">Login</button>
-        </EditForm>
-        <br />
-        <h4 style="color:red;text-align:center;">Warning<br />This application is no safe<br />Don't use it for public network</h4>
-    </div>
-
-    return;
+	return;
 }
 
 @code{
 
 
-    string viewmode = null;
-    string username = "pi";
-    string password = "raspberry";
+	string viewmode = null;
+	string username = "pi";
+	string password = "raspberry";
 
-    void DoLogin()
-    {
-        if (string.IsNullOrWhiteSpace(username))
-        {
-            BlazorSession.Current.Toast("Require username");
-            BlazorSession.Current.EvalCode("document.querySelector('.inp_username').focus()");
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(password))
-        {
-            BlazorSession.Current.Toast("Require password");
-            BlazorSession.Current.EvalCode("document.querySelector('.inp_password').focus()");
-            return;
-        }
+	void DoLogin()
+	{
+		if (string.IsNullOrWhiteSpace(username))
+		{
+			BlazorSession.Current.Toast("Require username");
+			BlazorSession.Current.EvalCode("document.querySelector('.inp_username').focus()");
+			return;
+		}
+		if (string.IsNullOrWhiteSpace(password))
+		{
+			BlazorSession.Current.Toast("Require password");
+			BlazorSession.Current.EvalCode("document.querySelector('.inp_password').focus()");
+			return;
+		}
 
-        username = username.Trim();
+		username = username.Trim();
 
-        if (Environment.OSVersion.Platform == PlatformID.Unix)
-        {
-            DoLogin_Unix();
-        }
-        else if (Environment.OSVersion.Platform == PlatformID.Win32NT)
-        {
-            DoLogin_WinNT();
-        }
-        else
-        {
-            BlazorSession.Current.Alert("Error", "Not Support");
-        }
-    }
+		if (Environment.OSVersion.Platform == PlatformID.Unix)
+		{
+			DoLogin_Unix();
+		}
+		else if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+		{
+			DoLogin_WinNT();
+		}
+		else
+		{
+			BlazorSession.Current.Alert("Error", "Not Support");
+		}
+	}
 
-    void DoLogin_WinNT()
-    {
-        if (string.Equals(username, "Administrator", StringComparison.OrdinalIgnoreCase))
-        {
-            BlazorSession.Current.Alert("Error", "Not allow Administrator, try another user.");
-            return;
-        }
+	void DoLogin_WinNT()
+	{
+		if (username.Contains("Administrator", StringComparison.OrdinalIgnoreCase))
+		{
+			BlazorSession.Current.Alert("Error", "Not allow Administrator, try another user.");
+			return;
+		}
 
-        using (var pc = new System.DirectoryServices.AccountManagement.PrincipalContext(System.DirectoryServices.AccountManagement.ContextType.Machine))
-        {
-            bool isok = pc.ValidateCredentials(username, password);
-            if (!isok)
-            {
-                BlazorSession.Current.Alert("Error", "Invalid Credentials");
-                return;
-            }
+		viewmode = "connecting";
+		BlazorSession ses = BlazorSession.Current;
+		ses.PostToRenderThread(delegate
+		{
+			using (var pc = new System.DirectoryServices.AccountManagement.PrincipalContext(System.DirectoryServices.AccountManagement.ContextType.Machine))
+			{
+				bool isok = pc.ValidateCredentials(username, password);
+				if (!isok)
+				{
+					viewmode = "login";
+					BlazorSession.Current.Alert("Error", "Invalid Credentials");
+					return;
+				}
 
+				var up = System.DirectoryServices.AccountManagement.UserPrincipal.FindByIdentity(pc, username);
+				var gp = System.DirectoryServices.AccountManagement.GroupPrincipal.FindByIdentity(pc, "Administrators");
+				if (up == null || gp == null || !up.IsMemberOf(gp))
+				{
+					viewmode = "login";
+					BlazorSession.Current.Alert("Error", "Require Administrators");
+					return;
+				}
 
+				BlazorSession.Current.Browser.SetMemoryItem("LogonOK", "OK");
+				viewmode = null;
+			}
+		});
+		ses.PostToRenderThread(StateHasChanged);
 
-            BlazorSession.Current.Browser.SetMemoryItem("LogonOK", "OK");
-            viewmode = null;
-        }
-    }
+	}
 
-    void DoLogin_Unix()
-    {
+	void DoLogin_Unix()
+	{
 
-        Renci.SshNet.SshClient client = new Renci.SshNet.SshClient("localhost", username, password);
+		Renci.SshNet.SshClient client = new Renci.SshNet.SshClient("localhost", username, password);
 
-        viewmode = "connecting";
+		viewmode = "connecting";
 
-        BlazorSession ses = BlazorSession.Current;
+		BlazorSession ses = BlazorSession.Current;
 
-        System.Threading.Thread t = new System.Threading.Thread(delegate ()
-        {
-            try
-            {
-                client.Connect();
-            }
-            catch (Exception x)
-            {
-                ses.InvokeInRenderThread(delegate
-                {
-                    BlazorSession.Current.Alert("Error", x.ToString());
-                    viewmode = "login";
-                    StateHasChanged();
-                });
-                return;
-            }
+		ses.PostToRenderThread(delegate
+		{
+			try
+			{
+				client.Connect();
+			}
+			catch (Exception x)
+			{
+				BlazorSession.Current.Alert("Error", x.ToString());
+				viewmode = "login";
+				StateHasChanged();
+				return;
+			}
 
-            ses.InvokeInRenderThread(delegate
-            {
-                BlazorSession.Current.Browser.SetMemoryItem("console_username", username);
-                BlazorSession.Current.Browser.SetMemoryItem("console_password", password);
+			BlazorSession.Current.Browser.SetMemoryItem("console_username", username);
+			BlazorSession.Current.Browser.SetMemoryItem("console_password", password);
 
-                BlazorSession.Current.Browser.SetMemoryItem("LogonOK", "OK");
-                viewmode = null;
-                StateHasChanged();
-            });
+			BlazorSession.Current.Browser.SetMemoryItem("LogonOK", "OK");
+			viewmode = null;
+			StateHasChanged();
 
-            try
-            {
+			try
+			{
+				client.Disconnect();
+				client.Dispose();
+			}
+			catch
+			{
 
-                client.Disconnect();
-                client.Dispose();
-            }
-            catch
-            {
+			}
 
-            }
+		});
 
-        });
-        t.Start();
-    }
+	}
 }
 
 
 
 
 @code{
-    bool keepStateWhenSwitchPages = true;
+	bool keepStateWhenSwitchPages = true;
 }
 
 
@@ -229,109 +221,109 @@
 
 @code{
 
-    TimeSpan GetUrlMaxLifeSpan(string url)
-    {
-        if (url.Contains("/fetchdata")) // Let /fetachdata always refresh
-            return TimeSpan.Zero;
+	TimeSpan GetUrlMaxLifeSpan(string url)
+	{
+		if (url.Contains("/fetchdata")) // Let /fetachdata always refresh
+			return TimeSpan.Zero;
 
-        if (url.Contains("/counter"))   // Let /counter expires in 10 seconds
-            return TimeSpan.FromSeconds(10);
+		if (url.Contains("/counter"))   // Let /counter expires in 10 seconds
+			return TimeSpan.FromSeconds(10);
 
-        return TimeSpan.FromSeconds(-1);    //other pages never expires
-    }
+		return TimeSpan.FromSeconds(-1);    //other pages never expires
+	}
 
-    class PageItem
-    {
-        public string Url;
-        public RenderFragment PageBody;
-        public DateTime StartTime = DateTime.Now;
-        public DateTime ActiveTime = DateTime.Now;
-        public TimeSpan MaxLifeSpan;
-    }
+	class PageItem
+	{
+		public string Url;
+		public RenderFragment PageBody;
+		public DateTime StartTime = DateTime.Now;
+		public DateTime ActiveTime = DateTime.Now;
+		public TimeSpan MaxLifeSpan;
+	}
 
-    Dictionary<string, PageItem> bodymap = new Dictionary<string, PageItem>();
+	Dictionary<string, PageItem> bodymap = new Dictionary<string, PageItem>();
 
-    int mainRenderCount = 0;
+	int mainRenderCount = 0;
 }
 
 <div class="sidebar">
-    <NavMenu />
+	<NavMenu />
 </div>
 
 <div class="main">
 
 
-    @{
+	@{
 
-        bool currurlrendered = false;
+		bool currurlrendered = false;
 
-        string currenturl = navmgr.Uri;
+		string currenturl = navmgr.Uri;
 
-        if (keepStateWhenSwitchPages)
-        {
-            PageItem curritem;
-            if (bodymap.TryGetValue(currenturl, out curritem))
-            {
-                curritem.ActiveTime = DateTime.Now;
-            }
-            else
-            {
-                curritem = new PageItem { Url = currenturl, PageBody = Body };
-                curritem.MaxLifeSpan = GetUrlMaxLifeSpan(currenturl);
-                if (curritem.MaxLifeSpan != TimeSpan.Zero)
-                {
-                    bodymap[navmgr.Uri] = curritem;
-                }
-            }
-        }
-        else
-        {
-            bodymap.Clear();
-        }
+		if (keepStateWhenSwitchPages)
+		{
+			PageItem curritem;
+			if (bodymap.TryGetValue(currenturl, out curritem))
+			{
+				curritem.ActiveTime = DateTime.Now;
+			}
+			else
+			{
+				curritem = new PageItem { Url = currenturl, PageBody = Body };
+				curritem.MaxLifeSpan = GetUrlMaxLifeSpan(currenturl);
+				if (curritem.MaxLifeSpan != TimeSpan.Zero)
+				{
+					bodymap[navmgr.Uri] = curritem;
+				}
+			}
+		}
+		else
+		{
+			bodymap.Clear();
+		}
 
-        mainRenderCount++;
+		mainRenderCount++;
 
-    }
+	}
 
-    @foreach (PageItem eachitem in bodymap.Values.Where(
-     eachitem => eachitem.Url != currenturl && eachitem.MaxLifeSpan.TotalSeconds > 0 && DateTime.Now - eachitem.ActiveTime > eachitem.MaxLifeSpan))
-    {
-        bodymap.Remove(eachitem.Url);
-    }
+	@foreach (PageItem eachitem in bodymap.Values.Where(
+   eachitem => eachitem.Url != currenturl && eachitem.MaxLifeSpan.TotalSeconds > 0 && DateTime.Now - eachitem.ActiveTime > eachitem.MaxLifeSpan))
+	{
+		bodymap.Remove(eachitem.Url);
+	}
 
-    <div class="top-row px-4">
-        @foreach (PageItem eachitem in bodymap.Values)
-        {
+	<div class="top-row px-4">
+		@foreach (PageItem eachitem in bodymap.Values)
+		{
 
-        }
-        <EditForm Model="this">
-            <label style="white-space: nowrap;"><InputCheckbox @bind-Value="keepStateWhenSwitchPages" />keepStateWhenSwitchPages</label>
-        </EditForm>
-    </div>
+		}
+		<EditForm Model="this">
+			<label style="white-space: nowrap;"><InputCheckbox @bind-Value="keepStateWhenSwitchPages" />keepStateWhenSwitchPages</label>
+		</EditForm>
+	</div>
 
-    @foreach (PageItem eachitem in bodymap.Values)
-    {
-        string pageurl = eachitem.Url;
-        RenderFragment pagebody = eachitem.PageBody;
+	@foreach (PageItem eachitem in bodymap.Values)
+	{
+		string pageurl = eachitem.Url;
+		RenderFragment pagebody = eachitem.PageBody;
 
-        string divstyle = "display:none";
-        if (pageurl == currenturl)
-        {
-            divstyle = "";
-            currurlrendered = true;
-        }
+		string divstyle = "display:none";
+		if (pageurl == currenturl)
+		{
+			divstyle = "";
+			currurlrendered = true;
+		}
 
-        <div @key="pageurl" class="content px-4" style="@divstyle">
-            @pagebody
-        </div>
-    }
+		<div @key="pageurl" class="content px-4" style="@divstyle">
+			@pagebody
+		</div>
+	}
 
-    @if (!currurlrendered)
-    {
-        <div class="content px-4">
-            @Body
-        </div>
-    }
+	@if (!currurlrendered)
+	{
+		<div class="content px-4">
+			@Body
+		</div>
+	}
 
 </div>
 
