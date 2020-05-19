@@ -79,7 +79,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 			}
 			catch (Exception x)
 			{
-				TcpMapService.OnError(x);
+				//TcpMapService.OnError(x);
 			}
 			finally
 			{

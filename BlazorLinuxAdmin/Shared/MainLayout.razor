@@ -3,7 +3,7 @@
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment whe
 
 @code{
-	bool AllowEnterDirectlyInDevMode = false;   //Warning:don't turn on it at server
+	bool AllowEnterDirectlyInDevMode = Environment.GetEnvironmentVariable("AllowEnterDirectlyInDevMode") == "Yes";   //Warning:don't turn on it at server
 }
 
 @if (BlazorSession.Current.Browser == null)
@@ -286,7 +286,7 @@
 	}
 
 	@foreach (PageItem eachitem in bodymap.Values.Where(
-   eachitem => eachitem.Url != currenturl && eachitem.MaxLifeSpan.TotalSeconds > 0 && DateTime.Now - eachitem.ActiveTime > eachitem.MaxLifeSpan))
+  eachitem => eachitem.Url != currenturl && eachitem.MaxLifeSpan.TotalSeconds > 0 && DateTime.Now - eachitem.ActiveTime > eachitem.MaxLifeSpan))
 	{
 		bodymap.Remove(eachitem.Url);
 	}
