@@ -29,7 +29,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 			sock.Blocking = false;
 			sock.NoDelay = true;
 			sock.ReceiveTimeout = 0;
-			sock.SendTimeout = 0;
+			sock.SendTimeout = 12000;
 			sock.SendBufferSize = TcpMapService.DefaultBufferSize;
 			sock.ReceiveBufferSize = TcpMapService.DefaultBufferSize * 2;
 

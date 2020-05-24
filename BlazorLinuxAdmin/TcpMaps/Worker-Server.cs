@@ -236,6 +236,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 
 		internal TcpMapServerClient FindClient()
 		{
+		TryAgain:
 			TcpMapServerClient sclient = null;
 			lock (_clients)
 			{
@@ -246,6 +247,14 @@ namespace BlazorLinuxAdmin.TcpMaps
 				else if (_clients.Count != 0)
 				{
 					sclient = _clients[Interlocked.Increment(ref nextclientindex) % _clients.Count];
+
+					if (DateTime.Now - sclient._lastPingTime > TimeSpan.FromSeconds(90))
+					{
+						//TODO:maybe the client socket has timeout
+						sclient.Stop();
+						//RemoveClientOrSession(sclient);
+						goto TryAgain;
+					}
 				}
 				else
 				{
@@ -290,6 +299,22 @@ namespace BlazorLinuxAdmin.TcpMaps
 			var list = client._is_client ? _clients : (client.SessionId != null ? _sessions : _presessions);
 			lock (list)
 				list.Add(client);
+			if (list.Count > 1)
+			{
+				//TODO:shall test alive for other clients
+				//When client switch IP , the socket will not timeout for read
+				List<TcpMapServerClient> others = new List<TcpMapServerClient>();
+				lock (list)
+				{
+					others = new List<TcpMapServerClient>(list);
+				}
+				foreach (var other in others)
+				{
+					if (other == client)
+						continue;
+					other.TestAlive();
+				}
+			}
 		}
 		internal void RemoveClientOrSession(TcpMapServerClient client)
 		{
@@ -454,6 +479,8 @@ namespace BlazorLinuxAdmin.TcpMaps
 		internal bool _is_client = true;
 		internal bool _is_session = false;
 
+		internal DateTime _lastPingTime = DateTime.Now;
+
 		public string SessionId = null;
 		CancellationTokenSource _cts_wait_upgrade;
 
@@ -600,6 +627,7 @@ namespace BlazorLinuxAdmin.TcpMaps
 								}
 								break;
 							case "_ping_":
+								this._lastPingTime = DateTime.Now;
 								await _swrite.WriteAsync(new CommandMessage("_ping_result_").Pack());
 								break;
 							case "_ping_result_":
@@ -715,6 +743,22 @@ namespace BlazorLinuxAdmin.TcpMaps
 		{
 			_attachedSession = session;
 			_cts_wait_upgrade.Cancel();
+		}
+
+		internal void TestAlive()
+		{
+			_ = Task.Run(async delegate
+			  {
+				  try
+				  {
+					  await _swrite.WriteAsync(new CommandMessage("_ping_result_").Pack());
+				  }
+				  catch (Exception x)
+				  {
+					  _worker.OnError(x);
+					  Stop();
+				  }
+			  });
 		}
 
 		internal void Stop()
