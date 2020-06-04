@@ -10,9 +10,9 @@ namespace BlazorLinuxAdmin
 	{
 		Microsoft.AspNetCore.Hosting.IWebHostEnvironment _whe;
 
-		public WebCustomizeSession(Microsoft.JSInterop.IJSRuntime jsr
+		public WebCustomizeSession(Microsoft.JSInterop.IJSRuntime jsr,Microsoft.AspNetCore.Components.NavigationManager nav
 			, Microsoft.AspNetCore.Hosting.IWebHostEnvironment whe) 
-			: base(jsr)
+			: base(jsr,nav)
 		{
 			_whe = whe;
 		}
