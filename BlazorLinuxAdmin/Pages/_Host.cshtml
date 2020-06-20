@@ -46,10 +46,9 @@
 			CheckLoaded();
 			if (window.MutationObserver) {
 				var observer = new MutationObserver(function (mutations, observer) {
-					mutations.forEach(function (mutation) {
-						if (app.innerHTML != html)
-							CheckLoaded();
-					});
+					if (div.parentNode)
+						div.parentNode.removeChild(div);
+					observer.disconnect();
 				});
 				observer.observe(app, { childList: true });
 			}
