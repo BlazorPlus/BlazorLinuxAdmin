@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BlazorPlus" Version="1.2.38" />
+    <PackageReference Include="BlazorPlus" Version="1.2.44" />
     <PackageReference Include="SSH.NET" Version="2016.1.0" />
     <PackageReference Include="System.Device.Gpio" Version="1.0.0" />
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="4.7.0" />
